@@ -43,7 +43,7 @@ jobs:
         run: |
           docker run --rm --volume "$PWD/tests:/app/tests:ro" \
             --entrypoint sh "$IMAGE:$GITHUB_SHA" \
-            -c 'pip install "pytest>=8.3" "httpx>=0.28" && python -m pytest'
+            -c 'pip install "pytest>=8.3" "httpx>=0.28" agent-framework-foundry "azure-identity>=1.19" && python -m pytest'
           node --check app/static/app.js
           node tests/i18n.cjs
           node tests/replay_controls.cjs
