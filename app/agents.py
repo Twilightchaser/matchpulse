@@ -821,6 +821,10 @@ class InsightWorkflow:
             try:
                 localized = self.narrative_service.localize(candidate, profile)
                 problem = self.checker.check_localized(localized, candidate, snapshot)
+                if not problem and profile.language == "zh":
+                    from app.language import chinese_copy_problem
+                    names = [snapshot.home_team, snapshot.away_team] + [e.player_name for e in event_lookup(snapshot).values()]
+                    problem = chinese_copy_problem(" ".join(localized.values()), names)
                 if problem:
                     traces.append(_trace(self.checker.name, started,
                                          f"Rejected model audience copy: {problem}. Using local copy.", "rejected"))
@@ -858,8 +862,11 @@ class InsightWorkflow:
         facts["language"] = "Simplified Chinese" if language == "zh" else "English"
         try:
             generated = self.narrative_service.recap(facts)
-            if language == "zh" and not re.search(r"[一-鿿]", generated):
-                raise ValueError("Requested Chinese recap was not Chinese")
+            if language == "zh":
+                from app.language import chinese_copy_problem
+                problem = chinese_copy_problem(generated, [snapshot.home_team, snapshot.away_team] + [e.player_name for e in events])
+                if problem:
+                    raise ValueError(problem)
             ok, reason = self.recap_agent.validate(generated, result, snapshot)
         except Exception as exc:
             ok, reason, generated = False, type(exc).__name__, ""

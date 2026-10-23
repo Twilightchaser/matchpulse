@@ -46,6 +46,51 @@ def test_recap():
     assert len(recap["goals"]) == len(goals) and recap["summary"]
 
 
+def test_quick_insight_does_not_wait_for_or_claim_a_model(monkeypatch):
+    import app.main as main
+    class ForbiddenModel:
+        def explain(self, *args):
+            raise AssertionError("Fast state path must not call a model")
+    monkeypatch.setattr(main.workflow, "narrative_service", ForbiddenModel())
+    goal = next(e for e in match_events() if e.outcome == "goal")
+    result = client.get("/api/insight", params={"minute": goal.minute, "second": goal.second, "quick": True}).json()
+    assert result["overlay"]["provider"] == "local"
+    assert result["overlay"]["verified"]
+    assert result["snapshot"]["score_home"] + result["snapshot"]["score_away"] >= 1
+
+
+def test_replay_events_continue_while_model_is_waiting(monkeypatch):
+    import asyncio
+    import threading
+    import app.main as main
+    release = threading.Event()
+    class SlowModel:
+        provider = "deepseek"
+        def explain(self, *args):
+            release.wait(2)
+            raise RuntimeError("test model unavailable")
+        def localize(self, *args):
+            raise RuntimeError("test model unavailable")
+    monkeypatch.setattr(main, "foundry_runtime", SlowModel())
+    original_analyze = main.InsightWorkflow.analyze
+    def blocked_analysis(workflow, *args):
+        if workflow.narrative_service is not None:
+            release.wait(2)
+        return original_analyze(workflow, *args)
+    monkeypatch.setattr(main.InsightWorkflow, "analyze", blocked_analysis)
+    async def run():
+        response = await main.replay(speed=60, from_second=0, mode="fan", language="en", player=None, team=None)
+        stream = response.body_iterator
+        try:
+            assert "match_update" in await asyncio.wait_for(anext(stream), 1)
+            # Model completion is deliberately blocked. Match events must still arrive.
+            assert "match_event" in await asyncio.wait_for(anext(stream), 1)
+        finally:
+            release.set()
+            await stream.aclose()
+    asyncio.run(run())
+
+
 def test_replay_stream_announces_the_winner_once():
     seen_updates, goal_cards = 0, set()
     with client.stream("GET", "/api/replay", params={"from_second": 5395, "speed": 60, "mode": "analyst"}) as response:

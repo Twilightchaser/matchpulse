@@ -183,7 +183,12 @@ def insight(
     language: str = Query(default="en", pattern="^(en|zh)$"),
     player: str | None = None,
     team: str | None = None,
+    quick: bool = False,
 ) -> InsightResponse:
+    if quick:
+        snapshot = build_snapshot(minute, second)
+        overlay, trace = InsightWorkflow(stateful=False).run(snapshot, make_profile(mode, language, player, team))
+        return InsightResponse(snapshot=snapshot, overlay=overlay, trace=trace)
     key = (minute, second, mode, language, player, team)
     cached = _card_cache.get(key)
     if cached is not None:
@@ -262,20 +267,52 @@ async def replay(
             return snapshot, overlay, traces
 
         # Agent calls may hit the network: run them off the event loop so other clients stay live.
-        snapshot, overlay, traces = await asyncio.to_thread(moment, from_second)
-        yield _packet(snapshot, overlay, traces, from_second)
-        previous_second, last_minute = from_second, from_second // 60
-        for event in events_list:
-            if event.match_second <= from_second:
-                continue
-            await asyncio.sleep(max(0.0, (event.match_second - previous_second) / speed))
-            previous_second = event.match_second
-            yield f"event: match_event\ndata: {json.dumps(event.model_dump(mode='json'))}\n\n"
-            if event.minute != last_minute or event.event_type == EventType.SHOT or event.sequence % 3 == 0:
-                last_minute = event.minute
-                snapshot, overlay, traces = await asyncio.to_thread(moment, event.match_second)
-                yield _packet(snapshot, overlay, traces, event.match_second)
-        yield "event: replay_complete\ndata: {}\n\n"
+        quick = InsightWorkflow(stateful=True)
+        quick.announced_event_ids = set(live.announced_event_ids)
+        pending = None
+        started = asyncio.get_running_loop().time()
+
+        def immediate(second):
+            snapshot = build_snapshot(second // 60, second % 60)
+            overlay, traces = quick.run(snapshot, profile)
+            return snapshot, overlay, traces
+
+        def enrichment(result):
+            snapshot, overlay, traces = result
+            return "event: narrative_update\ndata: " + json.dumps({
+                "second": snapshot.match_second,
+                "overlay": overlay.model_dump(mode="json") if overlay else None,
+                "trace": [t.model_dump(mode="json") for t in traces],
+            }) + "\n\n"
+
+        try:
+            result = immediate(from_second)
+            yield _packet(*result, from_second)
+            if foundry_runtime is not None:
+                pending = asyncio.create_task(asyncio.to_thread(moment, from_second))
+            for event in events_list:
+                if event.match_second <= from_second:
+                    continue
+                deadline = started + (event.match_second - from_second) / speed
+                remaining = deadline - asyncio.get_running_loop().time()
+                if pending is not None and remaining > 0:
+                    done, _ = await asyncio.wait({pending}, timeout=remaining)
+                    if done:
+                        yield enrichment(pending.result())
+                        pending = None
+                await asyncio.sleep(max(0., deadline - asyncio.get_running_loop().time()))
+                yield f"event: match_event\ndata: {json.dumps(event.model_dump(mode='json'))}\n\n"
+                result = immediate(event.match_second)
+                yield _packet(*result, event.match_second)
+                if pending is not None and pending.done():
+                    yield enrichment(pending.result())
+                    pending = None
+                if foundry_runtime is not None and pending is None and result[1] is not None:
+                    pending = asyncio.create_task(asyncio.to_thread(moment, event.match_second))
+            yield "event: replay_complete\ndata: {}\n\n"
+        finally:
+            if pending is not None:
+                pending.cancel()
 
     return StreamingResponse(event_stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

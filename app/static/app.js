@@ -8,6 +8,8 @@ let trackingAlerts = [];
 let lastSnapshot = null;
 let recapVersion = 0;
 let lastTraces = [];
+let lastEvent = null;
+let replayLimit = 0;
 let timedOverlay = null;
 let refreshVersion = 0;
 let frames = [];
@@ -204,9 +206,12 @@ function renderPitchAt(second) {
   const caption = $("#pitch-caption");
   caption.hidden = !timedOverlay || second < timedOverlay.display_at_second || second >= timedOverlay.display_at_second + timedOverlay.duration_seconds;
   if (!caption.hidden) caption.textContent = `${timedOverlay.headline} · ${timedOverlay.body}`;
-  if (left.score) {
-    $("#home-score").textContent = left.score[0];
-    $("#away-score").textContent = left.score[1];
+  const goals = allEvents.filter(e => e.outcome === "goal" && e.minute * 60 + e.second <= second);
+  $("#home-score").textContent = goals.filter(e => e.team_id === match.home_team).length;
+  $("#away-score").textContent = goals.filter(e => e.team_id === match.away_team).length;
+  if (timedOverlay && second >= timedOverlay.display_at_second + timedOverlay.duration_seconds) {
+    timedOverlay = null;
+    $("#overlay-card").hidden = true;
   }
 }
 
@@ -310,6 +315,12 @@ async function refresh() {
   const version = ++refreshVersion;
   const minute = Math.floor(replaySecond / 60);
   const params = new URLSearchParams({ ...profileParams(), minute, second: Math.floor(replaySecond % 60) });
+  timedOverlay = null;
+  $("#overlay-card").hidden = true;
+  const quick = await getJson(`/api/insight?${params}&quick=true`);
+  if (version !== refreshVersion || replaySource) return;
+  renderSnapshot(quick.snapshot, quick.overlay, quick.trace);
+  renderRecentEvents();
   const result = await getJson(`/api/insight?${params}`);
   if (version !== refreshVersion || replaySource) return;
   if (!result.overlay) {
@@ -371,7 +382,7 @@ function renderGoalMarkers(goals) {
   }).join("");
   box.querySelectorAll("button.marker").forEach((button) => button.addEventListener("click", () => {
     if (replaySource) pauseReplay();
-    updateClock(Number(button.dataset.second) + 15);
+    updateClock(Number(button.dataset.second));
     renderPitchAt(replaySecond);
     refresh();
   }));
@@ -382,7 +393,7 @@ function animateReplay(timestamp) {
   if (!previousFrameTime) previousFrameTime = timestamp;
   const elapsed = (timestamp - previousFrameTime) / 1000;
   previousFrameTime = timestamp;
-  updateClock(replaySecond + elapsed * Number($("#replay-speed").value));
+  updateClock(Math.min(replayLimit, replaySecond + elapsed * Number($("#replay-speed").value)));
   renderPitchAt(replaySecond);
   if (replaySecond < 90 * 60) animationFrame = requestAnimationFrame(animateReplay);
 }
@@ -403,6 +414,9 @@ function startReplay() {
   if (replaySecond >= 90 * 60) replaySecond = 0;
   if (replaySource) replaySource.close();
   announcedGoals = new Set();
+  replayLimit = replaySecond;
+  timedOverlay = null;
+  $("#overlay-card").hidden = true;
   $("#event-feed").replaceChildren();
   const speed = Number($("#replay-speed").value);
   const params = new URLSearchParams({ ...profileParams(), from_second: Math.floor(replaySecond), speed });
@@ -415,12 +429,11 @@ function startReplay() {
   replaySource.addEventListener("match_event", (event) => {
     if (source !== replaySource) return;
     const item = JSON.parse(event.data);
+    lastEvent = item;
+    replayLimit = Math.max(replayLimit, item.minute * 60 + item.second);
     const clock = formatClock(item.minute * 60 + item.second);
     if (item.outcome === "goal" && !announcedGoals.has(item.event_id)) {
       announcedGoals.add(item.event_id);
-      currentScore[item.team_id] = (currentScore[item.team_id] || 0) + 1;
-      $("#home-score").textContent = currentScore[match.home_team] || 0;
-      $("#away-score").textContent = currentScore[match.away_team] || 0;
       $("#scoreboard").classList.add("goal-flash");
       window.setTimeout(() => $("#scoreboard").classList.remove("goal-flash"), 900);
     }
@@ -439,9 +452,19 @@ function startReplay() {
     const packet = JSON.parse(event.data);
     // A remote model may finish after the pitch has moved on. Never rewind the display.
     const packetSecond = packet.snapshot.minute * 60 + (packet.snapshot.second || 0);
-    if (packetSecond > replaySecond + 2 || replaySecond - packetSecond > 12) return;
+    const nextEvent = allEvents.find(e => e.minute*60+e.second > packetSecond);
+    replayLimit = nextEvent ? nextEvent.minute*60+nextEvent.second : 5400;
+    updateClock(packetSecond);
     renderSnapshot(packet.snapshot, packet.overlay, packet.trace);
     renderPitchAt(replaySecond);
+  });
+  replaySource.addEventListener("narrative_update", event => {
+    if (source !== replaySource) return;
+    const packet = JSON.parse(event.data), card = packet.overlay;
+    if (!card || card.language !== state.language || card.mode !== state.mode || !lastSnapshot) return;
+    if (replaySecond < card.display_at_second || replaySecond >= card.display_at_second + card.duration_seconds) return;
+    if (timedOverlay && timedOverlay.display_at_second > card.display_at_second) return;
+    renderSnapshot(lastSnapshot, card, packet.trace);
   });
   replaySource.addEventListener("replay_complete", () => {
     if (source !== replaySource) return;
@@ -477,6 +500,7 @@ $("#language").addEventListener("click", (event) => {
   loadHealth();
   $("#fixture").textContent = fixtureLine();
   $("#event-feed").replaceChildren();
+  renderRecentEvents();
   $("#recap-provider").textContent = "";
   $("#recap-goal-heading").textContent = `${tr("Goals")} · ${$("#recap-goals").children.length}`;
   $("#overlay-card").hidden = true;
@@ -597,7 +621,15 @@ function renderMetricHud() {
   const label={xg:"xG",possession_pct:"Possession",pass_accuracy:"Pass accuracy",shots:"Shots"}[metric];
   const snap=lastSnapshot, home=snap.metrics[snap.home_team], away=snap.metrics[snap.away_team];
   const fmt=value=>metric.includes("pct") || metric==="pass_accuracy" ? `${value.toFixed(0)}%` : metric==="xg" ? value.toFixed(2) : String(value);
-  hud.textContent=`${label} · ${fmt(home[metric])} — ${fmt(away[metric])} · ${formatClock(snap.minute*60+snap.second)}`;
+  hud.textContent=`${tr(label)} · ${fmt(home[metric])} — ${fmt(away[metric])} · ${formatClock(snap.minute*60+snap.second)}`;
+}
+
+function renderRecentEvents() {
+  const recent = allEvents.filter(e => e.minute*60+e.second <= replaySecond).slice(-8).reverse();
+  const label = e => tr((e.attributes.pass_type ? e.attributes.pass_type + " pass" : e.event_type).replaceAll("_", " "));
+  lastEvent = recent[0] || null;
+  $("#last-event").textContent = lastEvent ? `${formatClock(lastEvent.minute*60+lastEvent.second)} · ${lastEvent.player_name} · ${label(lastEvent)}` : "";
+  $("#event-feed").innerHTML = recent.map(e => `<div class="feed-event ${e.outcome === "goal" ? "goal" : ""}"><time>${formatClock(e.minute*60+e.second)}</time><b>${escapeHtml(e.player_name)}</b><span>${escapeHtml(label(e))}<small>${escapeHtml(eventDetails(e))}</small></span><i>${escapeHtml(tr(e.outcome))}</i></div>`).join("");
 }
 $("#metric-focus").addEventListener("change",renderMetricHud);
 $("#sprint-threshold").addEventListener("change",buildTracking);

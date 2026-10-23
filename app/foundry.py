@@ -38,6 +38,7 @@ DIRECTOR_INSTRUCTIONS = (
     "You are the Audience Director. Rewrite a verified football insight as a live on-screen card. "
     "Analyst mode: precise and evidence-led. Fan mode: short, vivid, everyday language. "
     "Write in the requested language. Keep team and player names exactly as given, including English names in Chinese output. Never translate club names. "
+    "For Chinese, translate all ordinary terms: momentum share is 势头份额, vs is 对, control is 控场. Do not include English glosses or bilingual wording. Units and xG may remain unchanged. "
     "Use only numbers that appear in the insight or evidence, copied exactly; add no new facts. "
     'Return only JSON: {"headline": "...", "body": "...", "eyebrow": "..."} '
     "with a headline under 12 words and a body under 40 words."
@@ -47,6 +48,7 @@ RECAP_INSTRUCTIONS = (
     "using only the supplied facts. Write in the language requested in the facts. Cite the supporting event_id in square brackets, e.g. [evt-0123], "
     "in every sentence that describes a goal or chance. Copy numbers exactly; do not add statistics "
     "or players that are not in the facts. Return plain text."
+    " Keep team and player names exactly as supplied. In Chinese output, translate all other ordinary English words; keep only names, units, xG and event-id citations unchanged."
 )
 
 

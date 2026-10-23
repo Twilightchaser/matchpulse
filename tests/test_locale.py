@@ -1,6 +1,14 @@
 from pathlib import Path
 from app.agents import InsightWorkflow
 from app.metrics import MetricsEngine
+from app.language import chinese_copy_problem
+
+
+def test_chinese_model_copy_rejects_english_terms_but_preserves_names_and_units():
+    names = ["Northbridge FC", "N. Player 10"]
+    assert chinese_copy_problem("N. Player 10 为 Northbridge FC 破门，0.27 xG，87.4 km/h [evt-0581]。", names) is None
+    assert chinese_copy_problem("Northbridge FC momentum share（势头占比）69.3% vs 30.7%。", names)
+    assert chinese_copy_problem("Northbridge FC scored.", names)
 
 
 def test_chinese_recap_fallback_and_language_isolation(events,match):

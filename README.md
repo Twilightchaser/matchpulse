@@ -4,6 +4,8 @@
 
 The demo runs on Azure Container Apps in East Asia with DeepSeek behind Microsoft Agent Framework. It can scale to zero while idle, so the first visit may take longer to load.
 
+Playback sends verified local match state immediately while model narration runs separately. Live AI updates retain their original match timestamp and are discarded when their display window has passed. Seeking uses `/api/insight?quick=true` for an immediate local card, then replaces it with a checked model response. Local cards are labelled honestly; this does not claim sub-second model inference. Chinese model copy is checked for untranslated English terms (names, units and xG are preserved), with a Chinese template fallback.
+
 MatchPulse Studio is a live synthetic football intelligence system for broadcast studios, streaming platforms and fans. It turns a realistic event stream into explainable moments, evidence checked overlays, personalized storytelling and an automatic match recap.
 
 > Data statement: the project uses fictional teams, fictional players and synthetic football events only. It does not contain or redistribute real Premier League match data, footage, crests or player profiles.
