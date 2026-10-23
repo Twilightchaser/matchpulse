@@ -1,6 +1,25 @@
 # Deploy MatchPulse without ACR Tasks
 
-This package adds GitHub Actions image publishing to the supplied v0.6 source. It does not change the application, simulator, dependencies or Dockerfile. The workflow has been prepared locally; a successful GitHub run is still required to verify the actual image build.
+This package adds GitHub Actions image publishing to the supplied v0.6 source. The application, simulator and Dockerfile are unchanged. The deployment below was completed and checked on October 23, 2026.
+
+## Live deployment and verification
+
+- Website: https://matchpulse.blueriver-19b29690.eastasia.azurecontainerapps.io/
+- Source: https://github.com/Twilightchaser/matchpulse
+- Successful build: https://github.com/Twilightchaser/matchpulse/actions/runs/39934854178
+- Published application commit: `6122e3def13629418342366f3e3f5f8a3282020f`
+- Deployed image: `ghcr.io/twilightchaser/matchpulse@sha256:293248ca3d6d58184f120acec13163d644b5359cdbab5297fe868fe6109a37c8`
+- Azure revision: `matchpulse--latest`; revision health was `Healthy`, running state `Running`.
+- Resources: 1 vCPU, 2 GiB, minimum 0 replicas and maximum 1 replica. Idle scale-to-zero means a possible cold start. This is not a zero-cost guarantee.
+- Model: `deepseek-flash`; API key stored as Azure secret `deepseek-api-key` and referenced by `LLM_API_KEY`. No model or Azure credentials were uploaded to GitHub.
+
+The Linux/Python 3.12 image passed all 91 Python tests, JavaScript syntax, localization and replay-control checks, and a container startup health check. CI installs the optional Foundry testing dependencies in a disposable test container; they are not added to the production image.
+
+Live checks confirmed an actual DeepSeek-generated English goal insight, a Chinese analyst insight and Chinese full-time recap, with evidence validation. The replay, pause, timeline seeking and language switch were exercised in the browser; the browser error log was empty. The dataset endpoint returned 2,860 synthetic events, and the deterministic overlay export returned 29 cards with `model_calls: 0`.
+
+Deployment is complete, but these checks are not full submission acceptance. The first uncached English insight took about 3.4 seconds end to end, above the proposed one-second target. Generated Chinese copy still included English terminology such as `momentum share`, and a replay status line retained an English event label after switching languages. These need product polish before recording. A full 1920x1080 recording, the authentic Guardian rejection scene and the final submission are still separate tasks.
+
+For reproducible simulation snapshots, use the Dockerfile's Python 3.12 runtime. A separate local Python 3.14 run differed in two deterministic simulation assertions; those assertions passed in the deployed Linux/Python 3.12 image.
 
 ## Why this route
 
@@ -25,7 +44,7 @@ Wait for the run to succeed. If it fails, inspect the failing step instead of co
 
 From the repository's Packages section (or your GitHub profile's Packages tab), open the container package. Open Package settings -> Change visibility -> Public, and complete GitHub's confirmation.
 
-The image package is private on first publication even when the repository is public. Azure can pull a public GHCR image without GitHub credentials. Both the code repository and image package need public visibility for this path.
+Check package visibility separately from repository visibility. This project's package was verified as Public. Azure can pull a public GHCR image without GitHub credentials.
 
 https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry
 

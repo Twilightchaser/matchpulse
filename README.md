@@ -1,5 +1,9 @@
 # MatchPulse Studio
 
+[Open the live Azure demo](https://matchpulse.blueriver-19b29690.eastasia.azurecontainerapps.io/) · [Deployment and verification](AZURE_DEPLOYMENT.md)
+
+The demo runs on Azure Container Apps in East Asia with DeepSeek behind Microsoft Agent Framework. It can scale to zero while idle, so the first visit may take longer to load.
+
 MatchPulse Studio is a live synthetic football intelligence system for broadcast studios, streaming platforms and fans. It turns a realistic event stream into explainable moments, evidence checked overlays, personalized storytelling and an automatic match recap.
 
 > Data statement: the project uses fictional teams, fictional players and synthetic football events only. It does not contain or redistribute real Premier League match data, footage, crests or player profiles.
@@ -14,7 +18,7 @@ MatchPulse Studio is a live synthetic football intelligence system for broadcast
 - Fan and analyst modes, English and Chinese output, and a player focus view
 - Server-sent event replay with a continuous match clock, 22-player 4-3-3 tactical field and interpolated ball/player movement
 - Full-time Recap Agent with goals, key chances and match metrics
-- Optional Microsoft Foundry and Microsoft Agent Framework workflow adapter
+- Microsoft Agent Framework narrative agents backed by DeepSeek, with an optional Microsoft Foundry backend
 
 ## Challenge pipeline
 
