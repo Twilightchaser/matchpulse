@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="MatchPulse: live, evidence-checked match intelligence on synthetic football data">
+  <title>MatchPulse</title>
+  <link rel="preload" href="/static/fonts/barlow-condensed-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/styles.css?v=0.6.0">
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12h5l2.5-6 5 12 2.5-6h5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square"/></svg>
+      <span>MatchPulse</span>
+    </div>
+    <p class="fixture" id="fixture">Northbridge FC v Riverside Athletic, synthetic data</p>
+    <div class="view-controls">
+      <div class="segmented" role="group" aria-label="Audience">
+        <button class="active" data-mode="fan" aria-pressed="true">Fan</button>
+        <button data-mode="analyst" aria-pressed="false">Analyst</button>
+      </div>
+      <button class="language-button" id="language">中文</button>
+      <span class="engine" id="provider" data-live="false">Local agents</span>
+    </div>
+  </header>
+
+  <main class="studio">
+    <section class="stage" aria-label="Live match">
+      <div class="screen">
+      <div class="broadcast" id="pitch">
+        <svg class="markings" viewBox="0 0 105 68" preserveAspectRatio="none" aria-hidden="true">
+          <g fill="none" stroke="currentColor" stroke-width=".35">
+            <rect x="1" y="1" width="103" height="66"/>
+            <line x1="52.5" y1="1" x2="52.5" y2="67"/>
+            <circle cx="52.5" cy="34" r="9.15"/>
+            <rect x="1" y="13.85" width="16.5" height="40.3"/>
+            <rect x="87.5" y="13.85" width="16.5" height="40.3"/>
+            <rect x="1" y="24.85" width="5.5" height="18.3"/>
+            <rect x="98.5" y="24.85" width="5.5" height="18.3"/>
+            <path d="M17.5 26.7a9.15 9.15 0 0 1 0 14.6"/>
+            <path d="M87.5 26.7a9.15 9.15 0 0 0 0 14.6"/>
+          </g>
+          <g fill="currentColor"><circle cx="52.5" cy="34" r=".5"/><circle cx="12" cy="34" r=".4"/><circle cx="93" cy="34" r=".4"/></g>
+        </svg>
+      </div>
+
+        <div class="scorebug" id="scoreboard">
+          <span class="team-code home" id="home-team">NOR</span>
+          <span class="score-cell" id="home-score">0</span>
+          <span class="score-cell" id="away-score">0</span>
+          <span class="team-code away" id="away-team">RIV</span>
+          <span class="clock" id="clock">00:00</span>
+        </div>
+        <span class="phase" id="phase" data-phase="contested">Contested</span>
+
+        <article class="lower-third" id="overlay-card" aria-live="polite" hidden>
+          <div class="lt-bar">
+            <span class="lt-tags" id="eyebrow"></span>
+            <span class="lt-check" id="verified">Evidence checked</span>
+            <time id="overlay-time">--:--</time>
+          </div>
+          <div class="lt-body">
+            <h2 id="headline"></h2>
+            <p id="body"></p>
+            <dl class="lt-evidence" id="evidence"></dl>
+          </div>
+        </article>
+
+
+      </div>
+
+
+
+
+      <div class="transport">
+        <button class="play" id="replay-button">Play</button>
+        <div class="timeline">
+          <input id="minute" type="range" min="0" max="5400" step="1" value="0" aria-label="Match time">
+          <div class="markers" id="markers" aria-label="Goals"></div>
+        </div>
+        <output id="minute-output" for="minute">00:00</output>
+        <label class="speed"><span class="visually-hidden">Replay speed</span>
+          <select id="replay-speed"><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="12">12×</option></select>
+        </label>
+      </div>
+
+      <p id="last-event" class="last-event"></p>
+      <button id="recap-button">Match recap ↓</button>
+      <p class="replay-status" id="replay-status">Drag the timeline or press play to replay the match live.</p>
+    </section>
+
+    <aside class="rail">
+      <section class="rail-block">
+        <h2>Your view</h2>
+        <label class="field">Club
+          <select id="team-focus"><option value="">No favourite</option></select>
+        </label>
+        <label class="field">Follow a player
+          <select id="player-focus"><option value="">Nobody</option></select>
+        </label>
+        <label class="field" for="metric-focus">Focus metric
+          <select id="metric-focus"><option value="">None</option><option value="xg">xG</option><option value="possession_pct">Possession</option><option value="pass_accuracy">Pass accuracy</option><option value="shots">Shots</option></select>
+        </label>
+        <label class="field" for="sprint-threshold">Speed alert
+          <select id="sprint-threshold"><option value="22">22 km/h</option><option value="20">20 km/h</option><option value="30">30 km/h</option></select>
+        </label>
+        <p class="player-line" id="player-line">Pick a player to follow them on the pitch and in every card.</p>
+        <div class="player-metrics"><span id="player-distance">—</span><span id="player-speed">—</span><span id="player-events">—</span></div>
+      </section>
+
+      <section class="rail-block">
+        <h2>Key moments</h2>
+        <div class="moment-navigation" role="group" aria-label="Key moment navigation">
+            <button id="previous-moment" aria-label="Previous key moment">← Previous</button>
+            <label for="moment-select" class="sr-only">Choose a key moment</label>
+            <select id="moment-select"><option value="">Jump to a key moment…</option></select>
+            <button id="next-moment" aria-label="Next key moment">Next →</button>
+          </div>
+      </section>
+
+      <section class="rail-block">
+        <h2>Match stats</h2>
+        <div class="stat-head"><span id="stat-home-name">Northbridge FC</span><span id="stat-away-name">Riverside Athletic</span></div>
+        <div id="stats-rows" class="stats"></div>
+        <div class="momentum">
+          <span id="momentum-label">Momentum, last 5 minutes</span>
+          <div class="momentum-track"><i id="momentum-home"></i><i id="momentum-away"></i></div>
+        </div>
+      </section>
+
+      <section class="rail-block feed-block">
+        <h2>Event feed</h2>
+        <ol id="event-feed" class="event-feed"><li class="feed-empty">Events appear here during the replay.</li></ol>
+      </section>
+    </aside>
+  </main>
+
+  <section class="workings" aria-labelledby="workings-title">
+    <div class="workings-head">
+      <h2 id="workings-title">How this card was made</h2>
+      <p>Every card passes through the same agents. The Evidence Guardian rejects any sentence it cannot trace to a match event.</p>
+    </div>
+    <ol id="agent-trace" class="pipeline"></ol>
+    <div class="evidence-table" id="evidence-table"></div>
+  </section>
+
+    <section class="export-panel panel" aria-label="Synthetic data and overlay exports">
+      <strong>Production outputs · synthetic data</strong>
+      <a href="/api/dataset?format=json" target="_blank" rel="noopener">Events JSON ↗</a>
+      <a href="/api/dataset?format=csv">Events CSV ↓</a>
+      <a href="/api/dataset/schema" target="_blank" rel="noopener">Field definitions ↗</a>
+      <a id="timeline-export" href="/api/overlays/timeline" target="_blank" rel="noopener">Overlay timeline ↗</a>
+      <small>Timeline export uses verified local templates; live cards can use DeepSeek.</small>
+    </section>
+
+  <section id="recap" class="recap" aria-labelledby="recap-title">
+    <h2 class="visually-hidden" id="recap-title">Full-time recap</h2>
+    <div class="ft-graphic">
+      <span class="ft-label">Full time</span>
+      <div class="ft-score">
+        <span class="ft-team home" id="ft-home">Northbridge FC</span>
+        <span class="ft-num" id="recap-score">—</span>
+        <span class="ft-team away" id="ft-away">Riverside Athletic</span>
+      </div>
+      <h3 id="recap-goal-heading">Goals</h3><ol id="recap-goals" class="chances"></ol>
+    </div>
+    <div class="recap-text">
+      <p id="recap-summary">The recap is written from the full event log once the match is complete.</p>
+      <p class="recap-source" id="recap-provider"></p>
+      <h3>Chances that did not go in</h3>
+      <ol id="recap-chances" class="chances"></ol>
+    </div>
+  </section>
+
+  <script src="/static/i18n.js?v=0.6.0" defer></script>
+  <script src="/static/app.js?v=0.6.0" defer></script>
+</body>
+</html>

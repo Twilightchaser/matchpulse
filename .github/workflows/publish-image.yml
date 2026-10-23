@@ -1,0 +1,101 @@
+name: Build MatchPulse image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: matchpulse-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Choose image name
+        id: image
+        shell: bash
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          printf 'name=%s\n' "$image" >> "$GITHUB_OUTPUT"
+
+      - name: Build Linux image
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+        run: |
+          docker build --pull \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --tag "$IMAGE:$GITHUB_SHA" .
+
+      - name: Test the deployment runtime and browser scripts
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+        run: |
+          docker run --rm --volume "$PWD/tests:/app/tests:ro" \
+            --entrypoint sh "$IMAGE:$GITHUB_SHA" \
+            -c 'pip install "pytest>=8.3" "httpx>=0.28" && python -m pytest'
+          node --check app/static/app.js
+          node tests/i18n.cjs
+          node tests/replay_controls.cjs
+
+      - name: Check container startup without model credentials
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+        run: |
+          docker run --detach --name matchpulse-smoke \
+            --publish 127.0.0.1:18000:8000 "$IMAGE:$GITHUB_SHA"
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent --max-time 3 http://127.0.0.1:18000/api/health > /tmp/matchpulse-health.json; then
+              python -m json.tool /tmp/matchpulse-health.json
+              exit 0
+            fi
+            if [ "$(docker inspect --format '{{.State.Running}}' matchpulse-smoke)" != "true" ]; then
+              break
+            fi
+            sleep 2
+          done
+          docker logs matchpulse-smoke
+          exit 1
+
+      - name: Clean up smoke container
+        if: always()
+        run: |
+          if docker container inspect matchpulse-smoke > /dev/null 2>&1; then
+            docker rm --force matchpulse-smoke
+          fi
+
+      - name: Sign in to GitHub Container Registry
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Publish tested image
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+        run: |
+          docker push "$IMAGE:$GITHUB_SHA"
+          docker tag "$IMAGE:$GITHUB_SHA" "$IMAGE:latest"
+          docker push "$IMAGE:latest"
+
+      - name: Write Azure deployment command
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+        run: |
+          image_ref=$(docker image inspect "$IMAGE:$GITHUB_SHA" --format '{{index .RepoDigests 0}}')
+          {
+            printf '## Image ready\n\n`%s`\n\n' "$image_ref"
+            printf 'First open this repository package, then Package settings, and change its visibility to Public. Public repository visibility does not make the image public.\n\n'
+            printf 'Then run this in Azure Cloud Shell (Bash):\n\n```bash\n'
+            printf 'az containerapp up --name matchpulse --resource-group matchpulse-rg --environment matchpulse-env-eastasia --location eastasia --image "%s" --ingress external --target-port 8000\n' "$image_ref"
+            printf '```\n\nConfigure DeepSeek with Azure Container Apps secrets and environment variables after deployment. This startup check does not verify model connectivity.\n'
+          } >> "$GITHUB_STEP_SUMMARY"

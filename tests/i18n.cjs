@@ -1,0 +1,10 @@
+const vm=require('vm'),fs=require('fs'),assert=require('node:assert/strict');
+const context=vm.createContext({state:{language:'zh'}});
+vm.runInContext(fs.readFileSync('app/static/i18n.js','utf8'),context);
+assert.equal(vm.runInContext('tr("difficulty")',context),'难度');
+assert.equal(vm.runInContext('tr("goal")',context),'进球');
+context.state.language='en';
+assert.equal(vm.runInContext('tr("进球")',context).toLowerCase(),'goal');
+assert.equal(vm.runInContext('tr("难度")',context),'difficulty');
+assert.equal(vm.runInContext('tr("Northbridge FC")',context),'Northbridge FC');
+console.log('Locale: EN/Chinese roundtrip, metrics and proper-name preservation PASS');

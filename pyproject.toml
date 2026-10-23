@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "matchpulse-studio"
+version = "0.1.0"
+description = "面向直播演播室的合成足球比赛多智能体洞察引擎"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "pydantic>=2.10",
+  "python-dotenv>=1.0",
+  "uvicorn[standard]>=0.34",
+  # Microsoft Agent Framework: the narrative agents run on it whatever model is configured.
+  "agent-framework-core>=1.22",
+  "agent-framework-openai>=1.17",
+]
+
+[project.optional-dependencies]
+foundry = [
+  "agent-framework-foundry",
+  "azure-identity>=1.19",
+]
+dev = [
+  "httpx>=0.28",
+  "pytest>=8.3",
+  "pytest-cov>=6.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+app = ["static/*", "static/fonts/*"]
+
