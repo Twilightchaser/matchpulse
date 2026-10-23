@@ -83,13 +83,13 @@ def make_profile(mode: str, language: str, player: str | None, team: str | None)
 
 @app.get("/")
 def studio() -> FileResponse:
-    return FileResponse(BASE_DIR / "static" / "index.html")
+    return FileResponse(BASE_DIR / "static" / "index.html", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/api/health")
 def health() -> dict[str, str | bool | None]:
     ready = foundry_runtime is not None
-    return {"status": "ok", "provider": foundry_runtime.provider if ready else "local", "llm_ready": ready,
+    return {"status": "ok", "version": "0.6.1", "provider": foundry_runtime.provider if ready else "local", "llm_ready": ready,
             "foundry_ready": ready and foundry_runtime.provider == "foundry",
             "foundry_configured": foundry_configured(), "foundry_error": foundry_error}
 

@@ -413,3 +413,7 @@ button { cursor: pointer; }
   .team-code { min-width: 40px; }
   .pipeline { grid-auto-flow: row; }
 }
+
+@media (min-width: 1000px) {
+  .lt-evidence small, .stat-row small, .feed-event i, .pipeline .agent time, .evidence-table td:last-child, .export-panel small, .cite { font-size: 14px; }
+}
