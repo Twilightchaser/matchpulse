@@ -336,6 +336,12 @@ button { cursor: pointer; }
 }
 .player-marker.focused .player-name, .player-marker:hover .player-name { display: block; }
 .player-marker small { display: none; }
+/* Recording-sized screens keep player numbers and supporting text readable. */
+@media (min-width: 1000px) {
+  .player-marker { font-size: 14px; width: 28px; height: 28px; }
+  .player-name, .lt-evidence small, .stat-row small, .feed-event i,
+  .pipeline .agent time, .evidence-table td:last-child, .export-panel small, .cite { font-size: 14px; }
+}
 .player-marker.has-ball { box-shadow: 0 0 0 3px rgba(255,255,255,.85), 0 1px 3px rgba(0,0,0,.35); }
 .ball-shadow { position: absolute; left: 0; top: 0; width: 10px; height: 5px; background: #0008; border-radius: 50%; z-index: 3; pointer-events: none; }
 .flight-overlay { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }

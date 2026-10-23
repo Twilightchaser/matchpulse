@@ -236,8 +236,13 @@ function renderEvidenceTable(overlay) {
   const table = $("#evidence-table");
   if (!table) return;
   if (!overlay) { table.innerHTML = ""; return; }
-  const rows = overlay.evidence.map((item) => `<tr><th scope="row">${escapeHtml(tr(item.label))}</th><td>${escapeHtml(item.value)}</td><td>${item.event_ids.length ? escapeHtml(item.event_ids.join(", ")) : "—"}</td></tr>`).join("");
+  const rows = overlay.evidence.map((item) => `<tr><th scope="row">${escapeHtml(tr(item.label))}</th><td>${escapeHtml(evidenceValue(item.value))}</td><td>${item.event_ids.length ? escapeHtml(item.event_ids.join(", ")) : "—"}</td></tr>`).join("");
   table.innerHTML = `<table><caption>${escapeHtml(tr("Evidence behind this card"))}</caption><tbody>${rows}</tbody></table>`;
+}
+
+function evidenceValue(value) {
+  if (state.language !== "zh") return value;
+  return tr(value).replace(/ actions\b/g," 次").replace(/ regains\b/g," 次抢回").replace(/ goals\b/g," 球").replace(/ shots\b/g," 次射门").replace(/ touches\b/g," 次触球").replace(/ passes\b/g," 次传球").replace(/ vs /g," 对 ");
 }
 
 function renderStats(snapshot) {
