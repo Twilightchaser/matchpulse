@@ -5,14 +5,14 @@ const assert = require('node:assert/strict');
 const nodes = new Map();
 const node = selector => {
   if (!nodes.has(selector)) nodes.set(selector, {value:'',textContent:'',style:{},dataset:{},
-    addEventListener(){},setAttribute(){},replaceChildren(){},appendChild(){},classList:{add(){},remove(){},toggle(){}}});
+    addEventListener(){},setAttribute(){},replaceChildren(){},appendChild(){},querySelector(){return null},querySelectorAll(){return []},classList:{add(){},remove(){},toggle(){}}});
   return nodes.get(selector);
 };
 const cancelled=[];
 const spoken=[];
 const ctx = vm.createContext({console, URLSearchParams, Set, Map,
  document:{querySelector:node,querySelectorAll:()=>[]},
- window:{matchMedia:()=>({matches:false}),setTimeout(){},
+ window:{location:{search:''},matchMedia:()=>({matches:false}),setTimeout(){},
    speechSynthesis:{cancel(){},getVoices:()=>[{lang:'en-GB'},{lang:'zh-CN'}],speak:u=>spoken.push(u)},
    SpeechSynthesisUtterance:class {constructor(text){this.text=text}}},
  requestAnimationFrame:()=>42,cancelAnimationFrame:id=>cancelled.push(id),
@@ -47,11 +47,11 @@ vm.runInContext(`
  frames = Array.from({length:1700},(_,i)=>({second:i*.5,positions:[[i*3.1,0]]}));
  document.querySelector('#sprint-threshold').value='30';
  buildTracking();
- if(trackingAlerts.some(a=>a.text.includes('km/h'))) throw Error('Fabricated 30 km/h alert');
- if(!trackingAlerts.some(a=>a.text.includes('5 km covered'))) throw Error('Distance milestone missed');
+ if(trackingAlerts.some(a=>a.kind==='sprint')) throw Error('Fabricated 30 km/h alert');
+ if(!trackingAlerts.some(a=>a.kind==='distance' && a.value===5)) throw Error('Distance milestone missed');
  document.querySelector('#sprint-threshold').value='22';
  buildTracking();
- const alerts=trackingAlerts.filter(a=>a.text.includes('km/h'));
+ const alerts=trackingAlerts.filter(a=>a.kind==='sprint');
  if(!alerts.length || alerts.length>30) throw Error('Speed alerts missing or not debounced');
  if(!eventDetails({event_type:'pass',attributes:{distance_m:20,difficulty:.8,ball_speed_kmh:54}}).includes('hard')) throw Error('Pass details missing');
 `,ctx);

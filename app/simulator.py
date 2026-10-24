@@ -47,8 +47,8 @@ TEAMS = (
         "Sami Ellery",
     ), 0.76, 0.62),
     TeamProfile("Riverside Athletic", (
-        "Idris Kellan", "Nico Bellamy", "Kofi Aderin", "Rafael Saye", "Oscar Linton",
-        "Malik Arden", "Emil Kestrel", "Nolan Kaye", "Hugo Selwyn", "Mateo Arlen",
+        "Idris Kellan", "Nico Bellamy", "Kofi Aderin", "Rafael Saye", "Owen Larkmere",
+        "Malik Arden", "Emil Kestrel", "Nolan Veycroft", "Hugo Selwyn", "Mateo Arlen",
         "Elias Nouri",
     ), 0.58, 0.48),
 )

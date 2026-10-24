@@ -148,11 +148,18 @@ def allowed_numbers(evidence: list[Evidence], cited_events: list[MatchEvent], na
 
 
 def players_mentioned(text: str, names: list[str], player_names: set[str]) -> set[str]:
-    """Known player names in the text plus generic 'Player N' references."""
+    """Known full names, unique surnames, and generic 'Player N' references."""
     found = {name for name in player_names if _name_pattern(name).search(text)}
     remainder = text
     for name in names:
         remainder = _name_pattern(name).sub(" ", remainder)
+    surnames: dict[str, set[str]] = {}
+    for name in player_names:
+        if " " in name and not re.search(r"\bPlayer\s+\d+$", name):
+            surnames.setdefault(name.rsplit(" ", 1)[-1], set()).add(name)
+    for surname, owners in surnames.items():
+        if len(owners) == 1 and re.search(rf"(?<!\w){re.escape(surname)}(?!\w)", remainder, re.IGNORECASE):
+            found.update(owners)
     for initial, number in GENERIC_PLAYER_RE.findall(remainder):
         found.add(f"{initial + '. ' if initial else ''}Player {number}")
     return found

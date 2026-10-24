@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="MatchPulse: live, evidence-checked match intelligence on synthetic football data">
   <title>MatchPulse</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/static/fonts/barlow-condensed-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/static/styles.css?v=0.6.2">
+  <link rel="stylesheet" href="/static/styles.css?v=0.7.1">
 </head>
 <body>
   <header class="masthead">
@@ -21,6 +22,7 @@
         <button data-mode="analyst" aria-pressed="false">Analyst</button>
       </div>
       <button class="language-button" id="language">中文</button>
+      <button class="view-button" id="view-angle" type="button" aria-pressed="true">TV view</button>
       <button class="voice-button" id="voice-toggle" type="button" aria-pressed="false">Voice off</button>
       <span class="engine" id="provider" data-live="false">Local agents</span>
     </div>
@@ -30,6 +32,7 @@
     <section class="stage" aria-label="Live match">
       <div class="screen">
       <div class="broadcast" id="pitch">
+        <div class="pitch-plane" id="pitch-plane">
         <svg class="markings" viewBox="0 0 105 68" preserveAspectRatio="none" aria-hidden="true">
           <g fill="none" stroke="currentColor" stroke-width=".35">
             <rect x="1" y="1" width="103" height="66"/>
@@ -44,6 +47,8 @@
           </g>
           <g fill="currentColor"><circle cx="52.5" cy="34" r=".5"/><circle cx="12" cy="34" r=".4"/><circle cx="93" cy="34" r=".4"/></g>
         </svg>
+        </div>
+        <div class="loading-match" id="loading-match" role="status">Generating match…</div>
       </div>
 
         <div class="scorebug" id="scoreboard">
@@ -53,10 +58,16 @@
           <span class="team-code away" id="away-team">RIV</span>
           <span class="clock" id="clock">00:00</span>
         </div>
-        <span class="phase" id="phase" data-phase="contested">Contested</span>
+        <span class="phase" id="phase" data-phase="contested" hidden>Contested</span>
+
+        <div class="goal-banner" id="goal-banner" role="status" aria-live="assertive" hidden>
+          <strong id="goal-word">GOAL</strong>
+          <span id="goal-player"></span>
+        </div>
 
         <article class="lower-third" id="overlay-card" aria-live="polite" hidden>
           <div class="lt-bar">
+            <span class="lt-badge" id="lt-badge" aria-hidden="true"></span>
             <span class="lt-tags" id="eyebrow"></span>
             <span class="lt-check" id="verified">Evidence checked</span>
             <time id="overlay-time">--:--</time>
@@ -94,30 +105,30 @@
     <aside class="rail">
       <section class="rail-block">
         <h2>Your view</h2>
-        <label class="field">Club
-          <select id="team-focus"><option value="">No favourite</option></select>
-        </label>
+        <div class="rail-choice"><span>Club</span><div class="choice-row" id="team-buttons" role="group" aria-label="Club"></div></div>
+        <select id="team-focus" hidden aria-hidden="true"><option value="">No favourite</option></select>
         <label class="field">Follow a player
           <select id="player-focus"><option value="">Nobody</option></select>
         </label>
-        <label class="field" for="metric-focus">Focus metric
-          <select id="metric-focus"><option value="">None</option><option value="xg">xG</option><option value="possession_pct">Possession</option><option value="pass_accuracy">Pass accuracy</option><option value="shots">Shots</option></select>
-        </label>
-        <label class="field" for="sprint-threshold">Speed alert
-          <select id="sprint-threshold"><option value="22">22 km/h</option><option value="20">20 km/h</option><option value="30">30 km/h</option></select>
-        </label>
+        <div class="rail-choice"><span>Focus metric</span><div class="choice-row metric-choices" id="metric-buttons" role="group" aria-label="Focus metric">
+          <button data-metric="" aria-pressed="true">None</button><button data-metric="xg" aria-pressed="false">xG</button><button data-metric="possession_pct" aria-pressed="false">Possession</button><button data-metric="pass_accuracy" aria-pressed="false">Pass accuracy</button><button data-metric="shots" aria-pressed="false">Shots</button>
+        </div></div>
+        <select id="metric-focus" hidden aria-hidden="true"><option value="">None</option><option value="xg">xG</option><option value="possession_pct">Possession</option><option value="pass_accuracy">Pass accuracy</option><option value="shots">Shots</option></select>
+        <div class="rail-choice"><span>Speed alert</span><div class="choice-row" id="speed-buttons" role="group" aria-label="Speed alert">
+          <button data-speed="20" aria-pressed="false">20</button><button data-speed="22" aria-pressed="true">22</button><button data-speed="30" aria-pressed="false">30 <small>km/h</small></button>
+        </div></div>
+        <select id="sprint-threshold" hidden aria-hidden="true"><option value="22">22 km/h</option><option value="20">20 km/h</option><option value="30">30 km/h</option></select>
         <p class="player-line" id="player-line">Pick a player to follow them on the pitch and in every card.</p>
         <div class="player-metrics"><span id="player-distance">—</span><span id="player-speed">—</span><span id="player-events">—</span></div>
       </section>
 
       <section class="rail-block">
-        <h2>Key moments</h2>
-        <div class="moment-navigation" role="group" aria-label="Key moment navigation">
-            <button id="previous-moment" aria-label="Previous key moment">← Previous</button>
-            <label for="moment-select" class="sr-only">Choose a key moment</label>
-            <select id="moment-select"><option value="">Jump to a key moment…</option></select>
-            <button id="next-moment" aria-label="Next key moment">Next →</button>
-          </div>
+        <div class="rail-header"><h2>Key moments</h2><div class="moment-navigation" role="group" aria-label="Key moment navigation">
+            <button id="previous-moment" aria-label="Previous key moment">←</button>
+            <button id="next-moment" aria-label="Next key moment">→</button>
+          </div></div>
+          <select id="moment-select" hidden aria-hidden="true"><option value="">Jump to a key moment…</option></select>
+          <div id="moment-list" class="moment-list" role="list"></div>
       </section>
 
       <section class="rail-block">
@@ -125,12 +136,12 @@
         <div class="stat-head"><span id="stat-home-name">Northbridge FC</span><span id="stat-away-name">Riverside Athletic</span></div>
         <div id="stats-rows" class="stats"></div>
         <div class="momentum">
-          <span id="momentum-label">Momentum, last 5 minutes</span>
+          <div class="momentum-values"><b id="momentum-home-pct">50%</b><span id="momentum-label">Momentum, last 5 minutes</span><b id="momentum-away-pct">50%</b></div>
           <div class="momentum-track"><i id="momentum-home"></i><i id="momentum-away"></i></div>
         </div>
       </section>
 
-      <section class="rail-block feed-block">
+      <section class="rail-block feed-block" hidden>
         <h2>Event feed</h2>
         <ol id="event-feed" class="event-feed"><li class="feed-empty">Events appear here during the replay.</li></ol>
       </section>
@@ -174,7 +185,7 @@
     </div>
   </section>
 
-  <script src="/static/i18n.js?v=0.6.2" defer></script>
-  <script src="/static/app.js?v=0.6.2" defer></script>
+  <script src="/static/i18n.js?v=0.7.1" defer></script>
+  <script src="/static/app.js?v=0.7.1" defer></script>
 </body>
 </html>

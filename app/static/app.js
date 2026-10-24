@@ -1,20 +1,31 @@
-const state = { mode: "fan", language: "en", player: "", team: "" };
+const state = { mode: "fan", language: "en", player: "", team: "", view: "tv" };
+const demoParams = new URLSearchParams(window.location.search);
+const demoMode = demoParams.get("demo") === "1";
 const $ = (selector) => document.querySelector(selector);
 let replaySource;
 let moments = [];
 let allEvents = [];
 let tracking = [];
 let trackingAlerts = [];
+let telemetryEntries = new Map();
+let lastTelemetrySecond = 0;
+let telemetryPinned = [];
+let telemetrySeen = new Set();
+let telemetryHideTimer = null;
 let lastSnapshot = null;
 let recapVersion = 0;
 let lastTraces = [];
 let lastEvent = null;
 let replayLimit = 0;
 let timedOverlay = null;
+let overlayShownAt = 0;
 let refreshVersion = 0;
 let frames = [];
 let lineup = [];
 let playerNodes = new Map();
+let playerShadows = new Map();
+let focusTrail;
+let focusTrailLines = [];
 let ballNode;
 let ballShadow;
 let flightLine;
@@ -23,6 +34,8 @@ let animationFrame = 0;
 let previousFrameTime = 0;
 let currentScore = {};
 let announcedGoals = new Set();
+let goalCeremony = null;
+let goalCeremonyTimer = null;
 let pitchWidth = 0;
 let pitchHeight = 0;
 let match = { home_team: "Home", away_team: "Away" };
@@ -41,6 +54,15 @@ function updateVoiceButton() {
       ? (state.language === "zh" ? "语音：开" : "Voice on")
       : (state.language === "zh" ? "语音：关" : "Voice off");
   button.title = state.language === "zh" ? "正常速度播放时播报洞察；加速回放时暂停朗读" : "Read insights at normal replay speed; skip speech during fast replay";
+}
+
+function updateViewButton() {
+  const button = $("#view-angle");
+  $("#pitch").dataset.view = state.view;
+  button.setAttribute("aria-pressed", String(state.view === "tv"));
+  button.textContent = state.language === "zh"
+    ? (state.view === "tv" ? "电视视角" : "战术视角")
+    : (state.view === "tv" ? "TV view" : "Tactical view");
 }
 
 function stopVoice() {
@@ -63,6 +85,60 @@ function speakCard(card, force = false) {
 
 function teamCode(name) {
   return String(name || "").replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase();
+}
+
+function playerSurname(name) {
+  return String(name || "").trim().split(/\s+/).at(-1) || "";
+}
+
+function numberedPlayer(player) {
+  return player ? `#${player.number} ${player.player_name}` : "";
+}
+
+function numberedEventPlayer(event) {
+  const player = lineup.find(item => item.player_id === event.player_id);
+  return player ? numberedPlayer(player) : event.player_name;
+}
+
+function endGoalCeremony() {
+  if (goalCeremonyTimer) clearTimeout(goalCeremonyTimer);
+  goalCeremonyTimer = null;
+  goalCeremony = null;
+  const banner = $("#goal-banner");
+  banner.hidden = true;
+  banner.classList.remove("leaving");
+  $("#scoreboard").classList.remove("goal-flash");
+  if (timedOverlay) {
+    const card = $("#overlay-card");
+    card.hidden = false;
+    card.classList.remove("arrive");
+    requestAnimationFrame(() => card.classList.add("arrive"));
+  }
+}
+
+function showGoalCeremony(event) {
+  if (!event || event.outcome !== "goal") return;
+  endGoalCeremony();
+  goalCeremony = event.event_id;
+  const banner = $("#goal-banner");
+  banner.dataset.team = teamSide(event.team_id);
+  $("#goal-word").textContent = state.language === "zh" ? "进球" : "GOAL";
+  $("#goal-player").textContent = `${numberedEventPlayer(event)} · ${formatClock(event.minute * 60 + event.second)}`;
+  banner.hidden = false;
+  $("#overlay-card").hidden = true;
+  $("#scoreboard").classList.add("goal-flash");
+  renderPitchAt(replaySecond);
+  goalCeremonyTimer = setTimeout(() => {
+    if (prefersReducedMotion) { endGoalCeremony(); return; }
+    banner.classList.add("leaving");
+    goalCeremonyTimer = setTimeout(endGoalCeremony, 250);
+  }, prefersReducedMotion ? 1500 : 1600);
+}
+
+function showGoalNear(second) {
+  const goal = allEvents.findLast(item => item.outcome === "goal" && item.minute * 60 + item.second <= second);
+  if (goal && second - (goal.minute * 60 + goal.second) <= 20) showGoalCeremony(goal);
+  else endGoalCeremony();
 }
 
 function teamSide(teamId) {
@@ -130,48 +206,89 @@ async function loadMatch() {
     option.textContent = team;
     select.appendChild(option);
   });
+  const buttons = $("#team-buttons");
+  [{value:"", label:tr("No favourite"), code:"—"}, ...[match.home_team, match.away_team].map(team => ({value:team, label:team, code:teamCode(team)}))].forEach(item => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.team = item.value;
+    button.setAttribute("aria-label", item.label);
+    button.setAttribute("aria-pressed", String(!item.value));
+    button.innerHTML = `<span class="team-emblem ${teamSide(item.value)}">${escapeHtml(item.code)}</span><span>${escapeHtml(item.value ? item.code : item.label)}</span>`;
+    button.addEventListener("click", () => {
+      select.value = item.value;
+      select.dispatchEvent(new Event("change"));
+    });
+    buttons.appendChild(button);
+  });
+}
+
+function updateChoiceButtons() {
+  document.querySelectorAll("#team-buttons button").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.team === state.team)));
+  document.querySelectorAll("#metric-buttons button").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.metric === $("#metric-focus").value)));
+  document.querySelectorAll("#speed-buttons button").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.speed === $("#sprint-threshold").value)));
+}
+
+function updateFeedVisibility() {
+  $(".feed-block").hidden = !$("#event-feed").querySelector(".feed-event");
 }
 
 function initializePitch() {
   const pitch = $("#pitch");
+  const plane = $("#pitch-plane");
   const bounds = pitch.getBoundingClientRect();
   pitchWidth = bounds.width;
   pitchHeight = bounds.height;
-  pitch.querySelectorAll(".player-marker, .ball-marker").forEach((node) => node.remove());
+  plane.querySelectorAll(".player-marker, .player-shadow, .ball-marker, .ball-shadow, .flight-overlay, .focus-trail").forEach((node) => node.remove());
   playerNodes = new Map();
+  playerShadows = new Map();
   lineup.forEach((player) => {
+    const shadow = document.createElement("span");
+    shadow.className = "player-shadow";
+    shadow.setAttribute("aria-hidden", "true");
+    plane.appendChild(shadow);
+    playerShadows.set(player.player_id, shadow);
     const marker = document.createElement("span");
-    marker.className = `player-marker ${player.team_id === match.home_team ? "home" : "away"}`;
+    marker.className = `player-marker ${player.team_id === match.home_team ? "home" : "away"}${player.role === "GK" ? " goalkeeper" : ""}`;
     marker.dataset.playerId = player.player_id;
-    marker.innerHTML = `<b>${escapeHtml(player.number)}</b><small>${escapeHtml(player.role)}</small><em class="player-name">${escapeHtml(player.player_name)}</em>`;
-    marker.title = `${player.player_name} · ${player.role}`;
+    marker.innerHTML = `<b>${escapeHtml(player.number)}</b><small>${escapeHtml(player.role)}</small><em class="player-name">${escapeHtml(playerSurname(player.player_name))}</em>`;
+    marker.title = `${numberedPlayer(player)} · ${player.role}`;
     marker.addEventListener("click", () => {
       state.player = player.player_id;
       $("#player-focus").value = state.player;
       renderPitchAt(replaySecond);
       profileChanged();
     });
-    pitch.appendChild(marker);
+    plane.appendChild(marker);
     playerNodes.set(player.player_id, marker);
   });
   ballNode = document.createElement("span");
   ballNode.className = "ball-marker";
   ballNode.setAttribute("aria-label", "Ball");
-  pitch.appendChild(ballNode);
+  plane.appendChild(ballNode);
   ballShadow = document.createElement("span");
   ballShadow.className = "ball-shadow";
-  pitch.appendChild(ballShadow);
+  plane.appendChild(ballShadow);
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 105 68");
   svg.setAttribute("preserveAspectRatio", "none");
   svg.classList.add("flight-overlay");
   flightLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
   svg.appendChild(flightLine);
-  pitch.appendChild(svg);
+  plane.appendChild(svg);
+  focusTrail = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  focusTrail.setAttribute("viewBox", "0 0 105 68");
+  focusTrail.setAttribute("preserveAspectRatio", "none");
+  focusTrail.classList.add("focus-trail");
+  focusTrailLines = Array.from({length: 8}, () => {
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    focusTrail.appendChild(line);
+    return line;
+  });
+  plane.appendChild(focusTrail);
   const status = document.createElement("div");
   status.id = "pitch-action";
   pitch.appendChild(status);
-  for (const id of ["metric-hud", "tracking-alert", "action-metrics", "pitch-caption"]) {
+  for (const id of ["metric-hud", "pitch-caption"]) {
     const node = document.createElement("div");
     node.id = id; node.hidden = true; pitch.appendChild(node);
   }
@@ -185,10 +302,35 @@ function initializePitch() {
   }
 }
 
-function positionNode(node, x, y) {
+function positionNode(node, x, y, upright = true) {
   const pixelX = Math.max(0, Math.min(pitchWidth, (x / 105) * pitchWidth));
   const pixelY = Math.max(0, Math.min(pitchHeight, (y / 68) * pitchHeight));
-  node.style.transform = `translate3d(${pixelX}px,${pixelY}px,0) translate(-50%,-50%)`;
+  node.style.transform = `translate3d(${pixelX}px,${pixelY}px,0) translate(-50%,-50%)${upright ? " rotateX(calc(0deg - var(--tilt)))" : ""}`;
+}
+
+function trailPosition(second, playerIndex) {
+  const at = lastAt(frames, Math.max(0, second), frame => frame.second);
+  const a = frames[Math.max(0, at)];
+  const b = frames[Math.min(frames.length - 1, Math.max(0, at) + 1)];
+  const ratio = Math.max(0, Math.min(1, (second - a.second) / Math.max(.001, b.second - a.second)));
+  return [0, 1].map(axis => a.positions[playerIndex][axis] + (b.positions[playerIndex][axis] - a.positions[playerIndex][axis]) * ratio);
+}
+
+function renderFocusTrail(second) {
+  if (!focusTrail || !state.player || !frames.length) {
+    if (focusTrail) focusTrail.hidden = true;
+    return;
+  }
+  const index = lineup.findIndex(player => player.player_id === state.player);
+  if (index < 0) { focusTrail.hidden = true; return; }
+  focusTrail.hidden = false;
+  focusTrail.dataset.team = lineup[index].team_id === match.home_team ? "home" : "away";
+  const points = Array.from({length: 9}, (_, i) => trailPosition(Math.max(0, second - 8 + i), index));
+  focusTrailLines.forEach((line, i) => {
+    line.setAttribute("x1", points[i][0]); line.setAttribute("y1", points[i][1]);
+    line.setAttribute("x2", points[i + 1][0]); line.setAttribute("y2", points[i + 1][1]);
+    line.style.opacity = String(.13 + i * .065);
+  });
 }
 
 function renderPitchAt(second) {
@@ -210,15 +352,20 @@ function renderPitchAt(second) {
     const player = lineup[index];
     const marker = player && playerNodes.get(player.player_id);
     if (!marker) return;
-    positionNode(marker, coordinates[0] + (next[0] - coordinates[0]) * progress, coordinates[1] + (next[1] - coordinates[1]) * progress);
+    const x = coordinates[0] + (next[0] - coordinates[0]) * progress;
+    const y = coordinates[1] + (next[1] - coordinates[1]) * progress;
+    const shadow = playerShadows.get(player.player_id);
+    if (shadow) positionNode(shadow, x, y, false);
+    positionNode(marker, x, y);
     marker.classList.toggle("focused", Boolean(state.player) && marker.dataset.playerId === state.player);
     marker.classList.toggle("has-ball", left.owner === player.player_id);
   });
+  renderFocusTrail(second);
   if (ballNode) {
     const ball = left.ball;
     const nextBall = right.ball || ball;
     positionNode(ballNode, ball.x + (nextBall.x - ball.x) * progress, ball.y + (nextBall.y - ball.y) * progress);
-    positionNode(ballShadow, ball.x + (nextBall.x - ball.x) * progress, ball.y + (nextBall.y - ball.y) * progress);
+    positionNode(ballShadow, ball.x + (nextBall.x - ball.x) * progress, ball.y + (nextBall.y - ball.y) * progress, false);
     const height = (ball.z || 0) + ((nextBall.z || 0) - (ball.z || 0)) * progress;
     ballNode.style.marginTop = `-${height * 6}px`;
     ballNode.style.scale = String(1 + height * 0.08);
@@ -227,7 +374,7 @@ function renderPitchAt(second) {
   const labels = state.language === "zh" ? {short_pass:"短传配合",long_pass:"长传转移",through_pass:"直塞前插",lofted_pass:"高球传递",
     carry:"持球推进",shot:"射门",offside:"越位",corner:"角球",throw_in:"界外球",goal_kick:"球门球",kickoff:"中圈开球"}
     : {short_pass:"Short pass",long_pass:"Long pass",through_pass:"Through ball",lofted_pass:"Lofted pass",carry:"Ball carry",shot:"Shot",offside:"Offside",corner:"Corner",throw_in:"Throw-in",goal_kick:"Goal kick",kickoff:"Kickoff"};
-  $("#pitch-action").textContent = labels[left.phase] || left.phase || "";
+  $("#pitch-action").textContent = left.flight ? (labels[left.phase] || left.phase || "") : "";
   flightLine.style.display = left.flight ? "" : "none";
   if (left.flight) {
     flightLine.setAttribute("x1", left.flight.start[0]);
@@ -242,7 +389,7 @@ function renderPitchAt(second) {
   const goals = allEvents.filter(e => e.outcome === "goal" && e.minute * 60 + e.second <= second);
   $("#home-score").textContent = goals.filter(e => e.team_id === match.home_team).length;
   $("#away-score").textContent = goals.filter(e => e.team_id === match.away_team).length;
-  if (timedOverlay && second >= timedOverlay.display_at_second + timedOverlay.duration_seconds) {
+  if (timedOverlay && !goalCeremony && replaySource && performance.now() - overlayShownAt >= 12000) {
     timedOverlay = null;
     $("#overlay-card").hidden = true;
   }
@@ -296,6 +443,10 @@ function renderStats(snapshot) {
 
 function renderPlayer(snapshot) {
   const stats = state.player && snapshot.players ? snapshot.players[state.player] : null;
+  const chosen = lineup.find(player => player.player_id === state.player);
+  $("#player-line").hidden = !chosen;
+  $(".player-metrics").hidden = !chosen;
+  if (chosen) $("#player-line").textContent = `${numberedPlayer(chosen)} · ${chosen.role}`;
   $("#player-distance").textContent = stats ? `${(stats.distance_m / 1000).toFixed(2)} km` : "";
   // Current tracking speed is rendered alongside the pitch frame.
   if (!state.player) $("#player-speed").textContent = "";
@@ -312,13 +463,18 @@ function renderSnapshot(snapshot, overlay, trace) {
   currentScore = { [home]: snapshot.score_home, [snapshot.away_team]: snapshot.score_away };
   if (!replaySource) updateClock(replaySecond);
   $("#phase").textContent = state.language === "zh" ? tr(snapshot.phase) : sentenceCase(snapshot.phase.toUpperCase());
+  $("#phase").hidden = false;
   $("#phase").dataset.phase = snapshot.phase;
+  $("#phase").title = state.language === "zh"
+    ? {controlled:"一方持续控球并稳定推进", contested:"双方争夺球权", chaotic:"球权转换频繁"}[snapshot.phase]
+    : {controlled:"One side keeps stable possession", contested:"Both sides contest possession", chaotic:"Frequent changes of possession"}[snapshot.phase];
   const homeShare = snapshot.metrics[home].momentum_score;
   const awayShare = snapshot.metrics[snapshot.away_team].momentum_score;
   $("#momentum-home").style.width = `${homeShare}%`;
   $("#momentum-away").style.width = `${awayShare}%`;
-  const leader = homeShare >= awayShare ? home : snapshot.away_team;
-  $("#momentum-label").textContent = `${state.language === "zh" ? "近5分钟势头" : "Momentum, last 5 min"} · ${leader} ${Math.max(homeShare, awayShare).toFixed(0)}%`;
+  $("#momentum-home-pct").textContent = `${homeShare.toFixed(0)}%`;
+  $("#momentum-away-pct").textContent = `${awayShare.toFixed(0)}%`;
+  $("#momentum-label").textContent = state.language === "zh" ? "近 5 分钟势头" : "Momentum, last 5 minutes";
   renderStats(snapshot);
   renderPlayer(snapshot);
   // During replay keep the last interesting workflow visible instead of routine "no story" traces.
@@ -328,9 +484,11 @@ function renderSnapshot(snapshot, overlay, trace) {
     if (!timedOverlay) $("#overlay-card").hidden = true;
     return;
   }
+  if (!timedOverlay || timedOverlay.insight_id !== overlay.insight_id) overlayShownAt = performance.now();
   timedOverlay = overlay;
-  $("#overlay-card").hidden = false;
+  $("#overlay-card").hidden = Boolean(goalCeremony);
   $("#overlay-card").dataset.team = teamSide(overlay.team_id);
+  $("#lt-badge").textContent = teamCode(overlay.team_id || "");
   $("#overlay-card").dataset.verified = String(overlay.verified);
   $("#verified").textContent = overlay.verified ? tr("Evidence checked") : tr("Safe fallback");
   $("#provider").textContent = engineLabel(overlay.provider, overlay.provider !== "local");
@@ -378,6 +536,7 @@ async function loadMatchFrames() {
   buildTracking();
   initializePitch();
   renderPitchAt(replaySecond);
+  $("#loading-match").hidden = true;
   const select = $("#player-focus");
   [match.home_team, match.away_team].forEach((team) => {
     const group = document.createElement("optgroup");
@@ -385,7 +544,7 @@ async function loadMatchFrames() {
     lineup.filter((player) => player.team_id === team).forEach((player) => {
       const option = document.createElement("option");
       option.value = player.player_id;
-      option.textContent = `${player.player_name} · ${player.role}`;
+      option.textContent = `${numberedPlayer(player)} · ${player.role}`;
       group.appendChild(option);
     });
     select.appendChild(group);
@@ -423,6 +582,7 @@ function renderGoalMarkers(goals) {
     if (replaySource) pauseReplay();
     updateClock(Number(button.dataset.second));
     renderPitchAt(replaySecond);
+    showGoalNear(replaySecond);
     refresh();
   }));
 }
@@ -449,6 +609,7 @@ function pauseReplay(message = "REPLAY PAUSED") {
 }
 
 function startReplay() {
+  endGoalCeremony();
   stopVoice();
   lastSpokenCard = "";
   ++refreshVersion;
@@ -460,6 +621,7 @@ function startReplay() {
   timedOverlay = null;
   $("#overlay-card").hidden = true;
   $("#event-feed").replaceChildren();
+  updateFeedVisibility();
   const speed = Number($("#replay-speed").value);
   const params = new URLSearchParams({ ...profileParams(), from_second: Math.floor(replaySecond), speed });
   replaySource = new EventSource(`/api/replay?${params}`);
@@ -476,18 +638,18 @@ function startReplay() {
     const clock = formatClock(item.minute * 60 + item.second);
     if (item.outcome === "goal" && !announcedGoals.has(item.event_id)) {
       announcedGoals.add(item.event_id);
-      $("#scoreboard").classList.add("goal-flash");
-      window.setTimeout(() => $("#scoreboard").classList.remove("goal-flash"), 900);
+      showGoalCeremony(item);
     }
     const label = tr((item.attributes.pass_type ? item.attributes.pass_type + " pass" : item.event_type).replaceAll("_", " "));
     const measured = eventDetails(item);
-    $("#last-event").textContent = `${clock} · ${item.player_name} · ${label}`;
+    $("#last-event").textContent = `${clock} · ${numberedEventPlayer(item)} · ${label}`;
     const line = document.createElement("div");
     line.className = `feed-event ${item.outcome === "goal" ? "goal" : ""}`;
-    line.innerHTML = `<time>${clock}</time><b>${escapeHtml(item.player_name)}</b><span>${escapeHtml(label)}${measured ? `<small> · ${escapeHtml(measured)}</small>` : ""}</span><i>${escapeHtml(tr(item.outcome))}</i>`;
+    line.innerHTML = `<time>${clock}</time><b>${escapeHtml(numberedEventPlayer(item))}</b><span>${escapeHtml(label)}${measured ? `<small> · ${escapeHtml(measured)}</small>` : ""}</span><i>${escapeHtml(tr(item.outcome))}</i>`;
     const feed = $("#event-feed");
     feed.prepend(line);
     while (feed.children.length > 8) feed.lastElementChild.remove();
+    updateFeedVisibility();
   });
   replaySource.addEventListener("match_update", (event) => {
     if (source !== replaySource) return;
@@ -541,10 +703,12 @@ $("#language").addEventListener("click", (event) => {
   state.language = state.language === "en" ? "zh" : "en";
   event.currentTarget.textContent = state.language === "en" ? "中文" : "English";
   applyLocale();
+  updateViewButton();
   updateVoiceButton();
   loadHealth();
   $("#fixture").textContent = fixtureLine();
   $("#event-feed").replaceChildren();
+  updateFeedVisibility();
   renderRecentEvents();
   $("#recap-provider").textContent = "";
   $("#recap-goal-heading").textContent = `${tr("Goals")} · ${$("#recap-goals").children.length}`;
@@ -558,6 +722,12 @@ $("#language").addEventListener("click", (event) => {
   loadRecap().catch(error => { $("#recap-summary").textContent = tr("Recap unavailable. Please retry."); });
   if (lastSnapshot) renderSnapshot(lastSnapshot, null, []);
   profileChanged();
+});
+
+$("#view-angle").addEventListener("click", () => {
+  state.view = state.view === "tv" ? "tactical" : "tv";
+  updateViewButton();
+  renderPitchAt(replaySecond);
 });
 
 $("#voice-toggle").addEventListener("click", () => {
@@ -576,8 +746,19 @@ $("#player-focus").addEventListener("change", (event) => {
 
 $("#team-focus").addEventListener("change", (event) => {
   state.team = event.target.value;
+  updateChoiceButtons();
   profileChanged();
 });
+document.querySelectorAll("#metric-buttons button").forEach(button => button.addEventListener("click", () => {
+  $("#metric-focus").value = button.dataset.metric;
+  updateChoiceButtons();
+  renderMetricHud();
+}));
+document.querySelectorAll("#speed-buttons button").forEach(button => button.addEventListener("click", () => {
+  $("#sprint-threshold").value = button.dataset.speed;
+  updateChoiceButtons();
+  buildTracking();
+}));
 
 $("#minute").addEventListener("input", (event) => {
   if (replaySource) pauseReplay();
@@ -587,7 +768,7 @@ $("#minute").addEventListener("input", (event) => {
   $("#clock").textContent = formatClock(replaySecond);
   renderPitchAt(replaySecond);
 });
-$("#minute").addEventListener("change", refresh);
+$("#minute").addEventListener("change", () => { showGoalNear(replaySecond); highlightMomentFor(replaySecond); refresh(); });
 $("#replay-speed").addEventListener("change", () => {
   if (replaySource) startReplay();
 });
@@ -625,12 +806,12 @@ function buildTracking() {
   tracking.forEach((players, k) => players.forEach((p, i) => {
     const second = frames[k].second;
     if (p.speed >= threshold && second - lastSpeed[i] > 30) {
-      trackingAlerts.push({second, player:lineup[i].player_id, text:`${lineup[i].player_name} · ${p.speed.toFixed(1)} km/h`});
+      trackingAlerts.push({second, player:lineup[i].player_id, kind:"sprint", value:p.speed});
       lastSpeed[i] = second;
     }
     for (const mark of [5000, 10000]) {
       if (p.distance >= mark && (!k || tracking[k-1][i].distance < mark))
-        trackingAlerts.push({second, player:lineup[i].player_id, text:`${lineup[i].player_name} · ${mark/1000} km ${tr("covered")}`});
+        trackingAlerts.push({second, player:lineup[i].player_id, kind:"distance", value:mark/1000});
     }
   }));
   trackingAlerts.sort((a,b) => a.second-b.second);
@@ -643,22 +824,66 @@ function lastAt(items, second, time) {
 }
 
 function renderTelemetry(second, frameIndex) {
+  if (second < lastTelemetrySecond - 1.5) { telemetryEntries.clear(); telemetryPinned = []; telemetrySeen.clear(); }
+  lastTelemetrySecond = second;
+  const now = performance.now();
+  for (const [key, entry] of telemetryEntries) if (entry.until <= now) telemetryEntries.delete(key);
   const idx = lastAt(allEvents, second, e => e.minute*60+e.second);
-  let event = null;
-  for (let i=idx; i>=0 && second-(allEvents[i].minute*60+allEvents[i].second)<=5; i--) {
-    if (eventDetails(allEvents[i])) {event=allEvents[i];break;}
+  for (let i = idx; i >= 0 && second - (allEvents[i].minute*60 + allEvents[i].second) <= 3; i--) {
+    const event = allEvents[i];
+    if (!event.player_id || !["pass", "shot"].includes(event.event_type)) continue;
+    const a = event.attributes;
+    const text = event.event_type === "pass"
+      ? `${Number(a.distance_m || 0).toFixed(1)} m · ${Number(a.ball_speed_kmh || 0).toFixed(1)} km/h · ${state.language === "zh" ? (a.difficulty < .33 ? "易" : a.difficulty < .66 ? "中" : "难") : (a.difficulty < .33 ? "easy" : a.difficulty < .66 ? "medium" : "hard")}`
+      : `${Number(a.shot_speed_kmh || 0).toFixed(1)} km/h · ${Number(a.xg || 0).toFixed(2)} xG`;
+    if (!telemetrySeen.has(event.event_id)) {
+      telemetryEntries.set(event.event_id, {player:event.player_id, text, until:now+3000, started:now, priority:2});
+      telemetrySeen.add(event.event_id);
+    }
+    else if (telemetryEntries.has(event.event_id)) telemetryEntries.get(event.event_id).text = text;
   }
-  const detail = $("#action-metrics");
-  const text = event ? eventDetails(event) : "";
-  detail.hidden = !text || second-(event.minute*60+event.second)>5;
-  detail.textContent = event ? `${event.player_name} · ${text}` : "";
-  const ai = lastAt(trackingAlerts,second,e=>e.second);
-  let alert=null;
-  for(let i=ai;i>=0 && second-trackingAlerts[i].second<=5;i--) {
-    if(!state.player || trackingAlerts[i].player===state.player) {alert=trackingAlerts[i];break;}
+  const ai = lastAt(trackingAlerts, second, alert => alert.second);
+  for (let i = ai; i >= 0 && second - trackingAlerts[i].second <= 3; i--) {
+    const alert = trackingAlerts[i];
+    const key = `${alert.player}:${alert.kind}:${alert.second}`;
+    const text = alert.kind === "sprint"
+      ? `${state.language === "zh" ? "冲刺" : "Sprint"} ${alert.value.toFixed(1)} km/h`
+      : `${state.language === "zh" ? "跑动" : "Distance"} ${alert.value} km`;
+    if (!telemetrySeen.has(key)) {
+      telemetryEntries.set(key, {player:alert.player, text, until:now+3000, started:now, priority:1});
+      telemetrySeen.add(key);
+    }
+    else if (telemetryEntries.has(key)) telemetryEntries.get(key).text = text;
   }
-  $("#tracking-alert").hidden = !alert;
-  $("#tracking-alert").textContent = alert ? alert.text : "";
+  telemetryPinned = telemetryPinned.filter(key => telemetryEntries.has(key));
+  const newest = [...telemetryEntries.entries()].filter(([key]) => !telemetryPinned.includes(key))
+    .sort((a,b) => b[1].priority-a[1].priority || b[1].started-a[1].started);
+  for (const [key, entry] of newest) {
+    if (telemetryPinned.length >= 2) break;
+    if (![...telemetryPinned].some(pinned => telemetryEntries.get(pinned)?.player === entry.player)) telemetryPinned.push(key);
+  }
+  const selected = goalCeremony ? [] : telemetryPinned.map(key => telemetryEntries.get(key)).filter(Boolean);
+  for (const [playerId, marker] of playerNodes) {
+    let tag = marker.querySelector(".telemetry-tag");
+    const item = selected.find(entry => entry.player === playerId);
+    if (!item) { if (tag) tag.remove(); continue; }
+    if (!tag) { tag = document.createElement("span"); tag.className = "telemetry-tag"; marker.appendChild(tag); }
+    tag.textContent = item.text;
+    tag.classList.add("visible");
+    tag.setAttribute("aria-hidden", "false");
+    const box = tag.getBoundingClientRect();
+    const blockers = [$("#scoreboard"), $("#overlay-card")].filter(node => node && !node.hidden);
+    const blocked = box.top < 0 || box.left < 0 || box.right > window.innerWidth || blockers.some(node => {
+      const b = node.getBoundingClientRect();
+      return box.left < b.right && box.right > b.left && box.top < b.bottom && box.bottom > b.top;
+    });
+    if (blocked) { tag.classList.remove("visible"); tag.setAttribute("aria-hidden", "true"); }
+  }
+  if (telemetryHideTimer) clearTimeout(telemetryHideTimer);
+  telemetryHideTimer = null;
+  if (!replaySource && selected.length) {
+    telemetryHideTimer = setTimeout(() => renderPitchAt(replaySecond), Math.max(1, Math.min(...selected.map(item => item.until)) - now + 5));
+  }
   if(state.player) {
     const i=lineup.findIndex(p=>p.player_id===state.player);
     const data=tracking[frameIndex]?.[i];
@@ -681,8 +906,9 @@ function renderRecentEvents() {
   const recent = allEvents.filter(e => e.minute*60+e.second <= replaySecond).slice(-8).reverse();
   const label = e => tr((e.attributes.pass_type ? e.attributes.pass_type + " pass" : e.event_type).replaceAll("_", " "));
   lastEvent = recent[0] || null;
-  $("#last-event").textContent = lastEvent ? `${formatClock(lastEvent.minute*60+lastEvent.second)} · ${lastEvent.player_name} · ${label(lastEvent)}` : "";
-  $("#event-feed").innerHTML = recent.map(e => `<div class="feed-event ${e.outcome === "goal" ? "goal" : ""}"><time>${formatClock(e.minute*60+e.second)}</time><b>${escapeHtml(e.player_name)}</b><span>${escapeHtml(label(e))}<small>${escapeHtml(eventDetails(e))}</small></span><i>${escapeHtml(tr(e.outcome))}</i></div>`).join("");
+  $("#last-event").textContent = lastEvent ? `${formatClock(lastEvent.minute*60+lastEvent.second)} · ${numberedEventPlayer(lastEvent)} · ${label(lastEvent)}` : "";
+  $("#event-feed").innerHTML = recent.map(e => `<div class="feed-event ${e.outcome === "goal" ? "goal" : ""}"><time>${formatClock(e.minute*60+e.second)}</time><b>${escapeHtml(numberedEventPlayer(e))}</b><span>${escapeHtml(label(e))}<small>${escapeHtml(eventDetails(e))}</small></span><i>${escapeHtml(tr(e.outcome))}</i></div>`).join("");
+  updateFeedVisibility();
 }
 $("#metric-focus").addEventListener("change",renderMetricHud);
 $("#sprint-threshold").addEventListener("change",buildTracking);
@@ -700,7 +926,31 @@ async function loadMoments() {
     select.appendChild(option);
   });
   select.value = selected;
+  const list = $("#moment-list");
+  list.replaceChildren();
+  moments.forEach((moment, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.index = String(index);
+    button.className = "moment-item";
+    button.innerHTML = `<time>${formatClock(moment.second)}</time><i class="team-dot ${teamSide(moment.team)}"></i><span>${escapeHtml(tr(moment.kind))}</span>`;
+    button.setAttribute("aria-label", `${formatClock(moment.second)} · ${tr(moment.kind)} · ${moment.team}`);
+    button.setAttribute("aria-current", String(selected === String(index)));
+    button.addEventListener("click", () => seekMoment(index));
+    list.appendChild(button);
+  });
   $("#previous-moment").disabled = $("#next-moment").disabled = moments.length === 0;
+  highlightMomentFor(replaySecond);
+}
+
+function highlightMomentFor(second) {
+  const index = moments.findLastIndex(moment => moment.second <= second);
+  if (index < 0) return;
+  $("#moment-select").value = String(index);
+  const list = $("#moment-list");
+  const button = list.querySelector(`[data-index="${index}"]`);
+  list.querySelectorAll("button").forEach(item => item.setAttribute("aria-current", String(item === button)));
+  if (button) list.scrollTop = Math.max(0, button.offsetTop - list.offsetTop - (list.clientHeight - button.offsetHeight)/2);
 }
 
 function seekMoment(index) {
@@ -711,8 +961,9 @@ function seekMoment(index) {
   timedOverlay = null;
   updateClock(Math.max(0, moment.second - (moment.kind === "corner" ? 2 : 6)));
   renderPitchAt(replaySecond);
-  $("#moment-select").value = String(index);
+  highlightMomentFor(moment.second);
   $("#event-feed").replaceChildren();
+  updateFeedVisibility();
   $("#last-event").textContent = `${formatClock(moment.second)} · ${tr(moment.kind)} · ${moment.player}`;
   $("#headline").textContent = state.language === "zh" ? "正在解读这个时刻…" : "Reading this moment…";
   $("#body").textContent = "";
@@ -733,12 +984,42 @@ $("#previous-moment").addEventListener("click", () => {
   if (index >= 0) seekMoment(index);
 });
 
+if (demoMode) {
+  document.body.classList.add("demo-mode");
+  state.language = demoParams.get("lang") === "zh" ? "zh" : "en";
+  state.mode = demoParams.get("mode") === "analyst" ? "analyst" : "fan";
+  document.querySelectorAll("[data-mode]").forEach(button => {
+    button.classList.toggle("active", button.dataset.mode === state.mode);
+    button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode));
+  });
+  $("#language").textContent = state.language === "zh" ? "English" : "中文";
+  $("#replay-speed").value = "12";
+  replaySecond = 51 * 60 + 30;
+}
 applyLocale();
+updateViewButton();
 updateVoiceButton();
+if (demoMode) document.addEventListener("keydown", event => {
+  if (event.altKey || event.ctrlKey || event.metaKey || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || "")) return;
+  const key = event.key.toLowerCase();
+  if ([" ", "l", "m", "1", "2", "3"].includes(key)) event.preventDefault();
+  if (key === " ") $("#replay-button").click();
+  if (key === "l") $("#language").click();
+  if (key === "m") document.querySelector(`[data-mode="${state.mode === "fan" ? "analyst" : "fan"}"]`).click();
+  if (["1", "2", "3"].includes(key)) {
+    const goal = allEvents.filter(item => item.outcome === "goal")[Number(key) - 1];
+    if (!goal) return;
+    if (replaySource) pauseReplay();
+    updateClock(Math.max(0, goal.minute * 60 + goal.second - 6));
+    renderPitchAt(replaySecond);
+    startReplay();
+  }
+});
 loadMatch()
   .then(() => Promise.all([loadHealth(), loadMatchFrames(), loadMoments()]))
-  .then(() => { updateClock(0); startReplay(); loadRecap().catch(error => { $("#recap-summary").textContent = error.message; }); })
+  .then(() => { updateClock(demoMode ? 51 * 60 + 30 : 0); startReplay(); loadRecap().catch(error => { $("#recap-summary").textContent = error.message; }); })
   .catch((error) => {
+    $("#loading-match").textContent = tr("Studio connection interrupted");
     $("#headline").textContent = "Studio connection interrupted";
     $("#body").textContent = error.message;
   });

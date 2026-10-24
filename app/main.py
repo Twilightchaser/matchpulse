@@ -89,7 +89,7 @@ def studio() -> FileResponse:
 @app.get("/api/health")
 def health() -> dict[str, str | bool | None]:
     ready = foundry_runtime is not None
-    return {"status": "ok", "version": "0.6.2", "provider": foundry_runtime.provider if ready else "local", "llm_ready": ready,
+    return {"status": "ok", "version": "0.7.1", "provider": foundry_runtime.provider if ready else "local", "llm_ready": ready,
             "foundry_ready": ready and foundry_runtime.provider == "foundry",
             "foundry_configured": foundry_configured(), "foundry_error": foundry_error}
 

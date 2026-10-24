@@ -47,6 +47,18 @@ def test_guardian_rejects_players_outside_cited_events(snap):
     assert EvidenceGuardianAgent().run(c, SharedMatchState(snapshot=s))[0]
 
 
+def test_guardian_checks_unique_surname_without_full_name(snap):
+    s = snap(60).model_copy(deep=True)
+    c = goal_candidate(s)
+    cited_ids = {event_id for evidence in c.evidence for event_id in evidence.event_ids}
+    uncited = next(event for event in s.event_index.values()
+                   if event.player_name == "N. Player 4" and event.event_id not in cited_ids)
+    uncited.player_name = "Kofi Aderin"
+    c.explanation = "Aderin created the decisive chance."
+    ok, reason = EvidenceGuardianAgent().run(c, SharedMatchState(snapshot=s))
+    assert not ok and "Kofi Aderin" in reason
+
+
 def test_guardian_accepts_old_evidence_and_rejects_future_ids(snap):
     s = snap(60)
     c = goal_candidate(s)

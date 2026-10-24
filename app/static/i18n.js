@@ -1,4 +1,7 @@
 const UI_ZH = {
+  "Generating match…": "正在生成比赛…",
+  "Studio connection interrupted": "比赛连接中断",
+  "Momentum, last 5 minutes": "近 5 分钟势头",
   "Live":"实时", "Verified":"已校验", "Local":"本地", "Recap":"赛后回顾", "Local verified agents · DEMO":"本地校验解说 · 演示", "Local agents":"本地 Agent", "Key moments":"关键时刻", "Evidence behind this card":"这张卡片的证据", "Evidence checked":"证据已核验", "Safe fallback":"安全模式", "Progressive passes":"推进传球", "Possession changes: previous / current 5 min":"球权转换：前后5分钟窗口",
   "Fan": "球迷",
   "Analyst": "分析师",
