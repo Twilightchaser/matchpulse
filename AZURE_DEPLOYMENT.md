@@ -1,6 +1,17 @@
 # Deploy MatchPulse without ACR Tasks
 
-## Current release — October 24, 2026
+## Current release — October 24, 2026: 0.6.2
+
+- Source commit: `d77a60b4974a4df0f83e5bd2f6f4f617ed4b1040`
+- Successful build: https://github.com/Twilightchaser/matchpulse/actions/runs/40083191051
+- Deployed image: `ghcr.io/twilightchaser/matchpulse@sha256:b66158c64335a1ba58d0168361a1c7e58f28d6c91ee5d15d6174b7aa39b1081b`
+- `/api/health` reports `0.6.2` and provider `deepseek`.
+- The 22 demo players use distinct fictional names. The optional browser voice control reads verified cards in English or Chinese when enabled, with automatic speech skipped above 2× replay speed. Browser and installed voice support vary.
+- On the live site, the seeded goals remain at 17:46, 43:41 and 57:17. At the first goal, the Chinese card names Luca Wren and shows 1–0, 0.27 xG and 87.4 km/h. The browser displayed no console errors during this check.
+
+The two-minute video, final submission and an authentic Guardian numeric-rejection recording remain unfinished. Browser audio has been exercised through its control and a JavaScript speech-engine test; pronunciation and output quality must be checked by listening on the recording machine.
+
+## Previous release — October 24, 2026: 0.6.1
 
 - Live site: https://matchpulse.blueriver-19b29690.eastasia.azurecontainerapps.io/
 - Source commit: `5813f3d0b94fdcfe96c5ff4a3410300ba353be70`
