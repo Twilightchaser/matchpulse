@@ -9,7 +9,7 @@
 - The 22 demo players use distinct fictional names. The optional browser voice control reads verified cards in English or Chinese when enabled, with automatic speech skipped above 2× replay speed. Browser and installed voice support vary.
 - On the live site, the seeded goals remain at 17:46, 43:41 and 57:17. At the first goal, the Chinese card names Luca Wren and shows 1–0, 0.27 xG and 87.4 km/h. The browser displayed no console errors during this check.
 
-The two-minute video, final submission and an authentic Guardian numeric-rejection recording remain unfinished. Browser audio has been exercised through its control and a JavaScript speech-engine test; pronunciation and output quality must be checked by listening on the recording machine.
+An authentic Guardian numeric-rejection trace has been saved in `evidence/guardian-numeric-rejection.json`: DeepSeek supplied an unsupported 1–2 scoreline at 69:46, Guardian rejected it, and the revised explanation passed. The two-minute video and final submission remain unfinished. Browser audio has been exercised through its control and a JavaScript speech-engine test; pronunciation and output quality must be checked by listening on the recording machine.
 
 ## Previous release — October 24, 2026: 0.6.1
 
