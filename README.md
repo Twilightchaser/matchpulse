@@ -4,6 +4,8 @@
 
 The demo runs on Azure Container Apps in East Asia with DeepSeek behind Microsoft Agent Framework. It can scale to zero while idle, so the first visit may take longer to load.
 
+The 22 demo players now have distinct fictional names; their stable IDs, numbers, roles and the seeded match outcome are unchanged. The optional **Voice** control reads the current evidence-checked card in English or Chinese through the visitor's browser speech engine. It is user-initiated, stops on pause or language switch, and skips automatic reading above 2× replay speed. Voice availability and pronunciation depend on the browser and installed voices; no audio is sent to a server by this feature.
+
 Playback sends verified local match state immediately while model narration runs separately. Live AI updates retain their original match timestamp and are discarded when their display window has passed. Seeking uses `/api/insight?quick=true` for an immediate local card, then replaces it with a checked model response. Local cards are labelled honestly; this does not claim sub-second model inference. Chinese model copy is checked for untranslated English terms (names, units and xG are preserved), with a Chinese template fallback.
 
 MatchPulse Studio is a live synthetic football intelligence system for broadcast studios, streaming platforms and fans. It turns a realistic event stream into explainable moments, evidence checked overlays, personalized storytelling and an automatic match recap.

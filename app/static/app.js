@@ -27,6 +27,39 @@ let pitchWidth = 0;
 let pitchHeight = 0;
 let match = { home_team: "Home", away_team: "Away" };
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const voiceAvailable = Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance);
+let voiceEnabled = false;
+let lastSpokenCard = "";
+
+function updateVoiceButton() {
+  const button = $("#voice-toggle");
+  button.disabled = !voiceAvailable;
+  button.setAttribute("aria-pressed", String(voiceEnabled));
+  button.textContent = !voiceAvailable
+    ? (state.language === "zh" ? "语音不可用" : "Voice unavailable")
+    : voiceEnabled
+      ? (state.language === "zh" ? "语音：开" : "Voice on")
+      : (state.language === "zh" ? "语音：关" : "Voice off");
+  button.title = state.language === "zh" ? "正常速度播放时播报洞察；加速回放时暂停朗读" : "Read insights at normal replay speed; skip speech during fast replay";
+}
+
+function stopVoice() {
+  if (voiceAvailable) window.speechSynthesis.cancel();
+}
+
+function speakCard(card, force = false) {
+  if (!voiceEnabled || !voiceAvailable || !card?.headline) return;
+  const key = `${state.language}:${card.kind}:${card.display_at_second}`;
+  if (!force && (key === lastSpokenCard || replaySource && Number($("#replay-speed").value) > 2)) return;
+  lastSpokenCard = key;
+  stopVoice();
+  const utterance = new window.SpeechSynthesisUtterance(`${card.headline}. ${card.body || ""}`);
+  utterance.lang = state.language === "zh" ? "zh-CN" : "en-GB";
+  utterance.rate = 1;
+  const voice = window.speechSynthesis.getVoices().find(item => item.lang.toLowerCase().startsWith(state.language === "zh" ? "zh" : "en"));
+  if (voice) utterance.voice = voice;
+  window.speechSynthesis.speak(utterance);
+}
 
 function teamCode(name) {
   return String(name || "").replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase();
@@ -314,6 +347,7 @@ function renderSnapshot(snapshot, overlay, trace) {
   card.dataset.kind = overlay.kind || "";
   card.classList.remove("arrive");
   requestAnimationFrame(() => card.classList.add("arrive"));
+  speakCard(overlay);
 }
 
 async function refresh() {
@@ -409,11 +443,14 @@ function pauseReplay(message = "REPLAY PAUSED") {
   if (animationFrame) cancelAnimationFrame(animationFrame);
   animationFrame = 0;
   previousFrameTime = 0;
+  stopVoice();
   $("#replay-status").textContent = tr(message);
   $("#replay-button").textContent = tr("Resume replay");
 }
 
 function startReplay() {
+  stopVoice();
+  lastSpokenCard = "";
   ++refreshVersion;
   if (animationFrame) cancelAnimationFrame(animationFrame);
   if (replaySecond >= 90 * 60) replaySecond = 0;
@@ -499,9 +536,12 @@ document.querySelectorAll("[data-mode]").forEach((button) => button.addEventList
 }));
 
 $("#language").addEventListener("click", (event) => {
+  stopVoice();
+  lastSpokenCard = "";
   state.language = state.language === "en" ? "zh" : "en";
   event.currentTarget.textContent = state.language === "en" ? "中文" : "English";
   applyLocale();
+  updateVoiceButton();
   loadHealth();
   $("#fixture").textContent = fixtureLine();
   $("#event-feed").replaceChildren();
@@ -518,6 +558,14 @@ $("#language").addEventListener("click", (event) => {
   loadRecap().catch(error => { $("#recap-summary").textContent = tr("Recap unavailable. Please retry."); });
   if (lastSnapshot) renderSnapshot(lastSnapshot, null, []);
   profileChanged();
+});
+
+$("#voice-toggle").addEventListener("click", () => {
+  if (!voiceAvailable) return;
+  voiceEnabled = !voiceEnabled;
+  updateVoiceButton();
+  if (voiceEnabled && timedOverlay) speakCard(timedOverlay, true);
+  if (!voiceEnabled) stopVoice();
 });
 
 $("#player-focus").addEventListener("change", (event) => {
@@ -686,6 +734,7 @@ $("#previous-moment").addEventListener("click", () => {
 });
 
 applyLocale();
+updateVoiceButton();
 loadMatch()
   .then(() => Promise.all([loadHealth(), loadMatchFrames(), loadMoments()]))
   .then(() => { updateClock(0); startReplay(); loadRecap().catch(error => { $("#recap-summary").textContent = error.message; }); })

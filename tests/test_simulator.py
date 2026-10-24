@@ -33,6 +33,8 @@ def test_match_has_22_players_and_continuous_position_frames() -> None:
     )
     lineup_names = {player["player_id"]: player["player_name"] for player in lineup}
     assert all(lineup_names[event.player_id] == event.player_name for event in events)
+    assert len(set(lineup_names.values())) == 22
+    assert all("Player " not in name for name in lineup_names.values())
 
 
 def test_snapshot_can_stop_inside_a_minute() -> None:

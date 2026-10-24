@@ -41,8 +41,16 @@ class TeamProfile:
 
 
 TEAMS = (
-    TeamProfile("Northbridge FC", tuple(f"N. Player {i}" for i in range(1, 12)), 0.76, 0.62),
-    TeamProfile("Riverside Athletic", tuple(f"R. Player {i}" for i in range(1, 12)), 0.58, 0.48),
+    TeamProfile("Northbridge FC", (
+        "Evan Calder", "Milo Hartwell", "Jonah Mercer", "Amari Voss", "Felix Rowe",
+        "Kian Sorrell", "Tariq Fenwick", "Dario Vale", "Theo Marsh", "Luca Wren",
+        "Sami Ellery",
+    ), 0.76, 0.62),
+    TeamProfile("Riverside Athletic", (
+        "Idris Kellan", "Nico Bellamy", "Kofi Aderin", "Rafael Saye", "Oscar Linton",
+        "Malik Arden", "Emil Kestrel", "Nolan Kaye", "Hugo Selwyn", "Mateo Arlen",
+        "Elias Nouri",
+    ), 0.58, 0.48),
 )
 
 FORMATION_433 = (

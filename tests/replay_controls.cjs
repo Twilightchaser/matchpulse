@@ -5,13 +5,16 @@ const assert = require('node:assert/strict');
 const nodes = new Map();
 const node = selector => {
   if (!nodes.has(selector)) nodes.set(selector, {value:'',textContent:'',style:{},dataset:{},
-    addEventListener(){},replaceChildren(){},appendChild(){},classList:{add(){},remove(){},toggle(){}}});
+    addEventListener(){},setAttribute(){},replaceChildren(){},appendChild(){},classList:{add(){},remove(){},toggle(){}}});
   return nodes.get(selector);
 };
 const cancelled=[];
+const spoken=[];
 const ctx = vm.createContext({console, URLSearchParams, Set, Map,
  document:{querySelector:node,querySelectorAll:()=>[]},
- window:{matchMedia:()=>({matches:false}),setTimeout(){}},
+ window:{matchMedia:()=>({matches:false}),setTimeout(){},
+   speechSynthesis:{cancel(){},getVoices:()=>[{lang:'en-GB'},{lang:'zh-CN'}],speak:u=>spoken.push(u)},
+   SpeechSynthesisUtterance:class {constructor(text){this.text=text}}},
  requestAnimationFrame:()=>42,cancelAnimationFrame:id=>cancelled.push(id),
  EventSource:class {addEventListener(){} close(){this.closed=true;}},
  fetch:async()=>({ok:true,json:async()=>({snapshot:{},overlay:null,trace:[]})})});
@@ -53,3 +56,18 @@ vm.runInContext(`
  if(!eventDetails({event_type:'pass',attributes:{distance_m:20,difficulty:.8,ball_speed_kmh:54}}).includes('hard')) throw Error('Pass details missing');
 `,ctx);
 console.log('Telemetry: true speed threshold, distance milestone, debounce and pass metrics PASS');
+
+vm.runInContext(`
+ voiceEnabled=true;
+ state.language='en';
+ const card={kind:'goal',display_at_second:1066,headline:'Luca Wren scores',body:'Northbridge lead.'};
+ speakCard(card);
+ speakCard(card);
+ if (lastSpokenCard !== 'en:goal:1066') throw Error('Voice card identity missing');
+ state.language='zh';
+ speakCard({...card,headline:'Luca Wren 进球',body:'Northbridge 领先。'});
+`,ctx);
+assert.equal(spoken.length,2);
+assert.equal(spoken[0].lang,'en-GB');
+assert.equal(spoken[1].lang,'zh-CN');
+console.log('Voice: bilingual card speech and duplicate suppression PASS');
