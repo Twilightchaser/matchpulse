@@ -1,5 +1,20 @@
 # Deploy MatchPulse without ACR Tasks
 
+## Current release — October 24, 2026
+
+- Live site: https://matchpulse.blueriver-19b29690.eastasia.azurecontainerapps.io/
+- Source commit: `5813f3d0b94fdcfe96c5ff4a3410300ba353be70`
+- Successful build: https://github.com/Twilightchaser/matchpulse/actions/runs/39976562933
+- Deployed image: `ghcr.io/twilightchaser/matchpulse@sha256:2cac2eec784442093c378bd751d3e9e6f3578bef15212ca7741ca5caf275f418`
+- `/api/health` reports version `0.6.1` and provider `deepseek`. The HTML loads `/static/app.js?v=0.6.1` with `Cache-Control: no-cache`.
+- At 17:46, the first goal marker lands on the goal, shows Northbridge FC 1–0 Riverside Athletic, and displays a verified Chinese card with 0.27 xG and 87.4 km/h shot speed. The event feed is rebuilt in Chinese after switching language.
+- CI passed 94 Python tests, JavaScript syntax and frontend checks, plus container smoke testing. A live replay sample showed 41 events and 42 state updates while an AI narrative call was in flight.
+- The model API key remains an Azure Container Apps secret and is not part of the repository or distribution ZIP.
+
+Recording and submission are still pending. The real numeric Evidence Guardian rejection requested for the video has not yet been captured; an actual Chinese language rejection with a safe fallback has been recorded. Live one-second latency is not guaranteed, especially after a cold start. The simulator is an illustrative synthetic match, not a production tracking system.
+
+## Initial deployment — October 23, 2026
+
 This package adds GitHub Actions image publishing to the supplied v0.6 source. The application, simulator and Dockerfile are unchanged. The deployment below was completed and checked on October 23, 2026.
 
 ## Live deployment and verification
