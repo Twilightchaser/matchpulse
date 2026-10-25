@@ -6,6 +6,8 @@
 
 在本机 `.env` 或 `matchpulse.env` 配置独立的 `INGEST_API_KEY`，然后重启服务。它与 DeepSeek 密钥不同。所有外部接口都要求请求头 `X-Ingest-Key`，不要将该密钥放在网页前端、URL 或公开仓库中。未配置返回 503，错误密钥返回 401。
 
+公开 Azure 演示环境不配置 `INGEST_API_KEY`，所以 `/api/live` 保持关闭（503）。不要为了演示而公开开启它；一旦启用，持有该密钥的调用方就能提交比赛事件并请求洞察。真实供应商接入应在有授权、密钥受控的独立环境验收。
+
 1. `POST /api/live/matches`，JSON 示例：
 
 ```json
