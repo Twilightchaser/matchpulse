@@ -41,8 +41,9 @@ def test_player_progressive_pass_generates_own_story_and_viewpoint():
     wf=InsightWorkflow(stateful=False)
     card,_=wf.run(snap,AudienceProfile(favorite_player="p1",favorite_team="Home"))
     assert card.kind=="player_moment" and card.verified
-    assert card.body.startswith("Your club:")
-    assert "Ben" not in card.body
+    # The viewer's club and player are tags on the graphic, not boilerplate glued to the copy.
+    assert card.eyebrow=="YOUR TEAM · PLAYER FOCUS"
+    assert card.body.startswith("Alex") and "Ben" not in card.body
 
 
 def test_rhythm_uses_same_possession_change_definition_as_metrics():

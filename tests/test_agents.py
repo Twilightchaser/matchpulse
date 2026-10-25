@@ -141,8 +141,14 @@ def test_localized_copy_is_fact_checked(snap, fake):
 
     service.localized = {"headline": "N. Player 10 为 Northbridge FC 破门", "body": "0.24 xG 的机会，比分 2-1。",
                          "eyebrow": "进球"}
-    card, _ = InsightWorkflow(narrative_service=service, stateful=False).run(snap(60), AudienceProfile(language="zh"))
+    card, _ = InsightWorkflow(narrative_service=service, stateful=False).run(
+        snap(60), AudienceProfile(mode="analyst", language="zh"))
     assert card.provider == "foundry" and card.headline.startswith("N. Player 10")
+    # House style: fans get chance quality in words, so the same decimals are sent back on a fan card.
+    card, traces = InsightWorkflow(narrative_service=service, stateful=False).run(snap(60), AudienceProfile(language="zh"))
+    assert card.provider == "local" and "0.24" not in card.body
+    rejected = next(t for t in traces if t.status == "rejected")
+    assert "fan copy uses decimals" in rejected.summary and "球迷文案里出现了小数" in rejected.summary_zh
 
 
 def test_live_replay_announces_each_goal_once(snap):

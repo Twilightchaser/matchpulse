@@ -18,7 +18,9 @@ from starlette.responses import StreamingResponse
 from starlette.middleware.gzip import GZipMiddleware
 
 from app.agents import AudienceProfile, InsightWorkflow
+from app.commentary import build_commentary
 from app.foundry import FoundryRuntime, foundry_configured
+from app.house_style import kind_label, minute_mark
 from app.llm import DeepSeekRuntime, llm_configured
 from app.metrics import MetricsEngine
 from app.models import EventType, InsightResponse, MatchEvent, MatchMetadata, MatchSnapshot
@@ -49,7 +51,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="MatchPulse Studio API",
-    version="0.2.0",
+    version="0.8.0",
     description="Real-time multi-agent intelligence for synthetic football matches",
     lifespan=lifespan,
 )
@@ -89,7 +91,7 @@ def studio() -> FileResponse:
 @app.get("/api/health")
 def health() -> dict[str, str | bool | None]:
     ready = foundry_runtime is not None
-    return {"status": "ok", "version": "0.7.1", "provider": foundry_runtime.provider if ready else "local", "llm_ready": ready,
+    return {"status": "ok", "version": "0.8.0", "provider": foundry_runtime.provider if ready else "local", "llm_ready": ready,
             "foundry_ready": ready and foundry_runtime.provider == "foundry",
             "foundry_configured": foundry_configured(), "foundry_error": foundry_error}
 
@@ -164,6 +166,34 @@ def overlay_timeline(mode: str = Query(default="fan", pattern="^(fan|analyst)$")
                      language: str = Query(default="en", pattern="^(en|zh)$"),
                      player: str | None = None, team: str | None = None):
     return build_overlay_timeline(mode, language, player, team)
+
+
+@lru_cache(maxsize=8)
+def _commentary(language: str, mode: str) -> list[dict]:
+    return build_commentary(list(match_events()), MATCH.home_team, MATCH.away_team, language, mode)
+
+
+@app.get("/api/commentary")
+def commentary(language: str = Query(default="en", pattern="^(en|zh)$"),
+               mode: str = Query(default="fan", pattern="^(fan|analyst)$")) -> list[dict]:
+    """Curated, human-readable event feed: shots, goals, set pieces and high regains only."""
+    return _commentary(language, mode)
+
+
+# Key moments are the cards that tell the match story, taken from the verified overlay timeline.
+HIGHLIGHT_RANK = {"goal": 0, "chance": 0, "momentum_shift": 1, "transition": 2}
+MAX_HIGHLIGHTS = 12
+
+
+@app.get("/api/highlights")
+def highlights(language: str = Query(default="en", pattern="^(en|zh)$"),
+               mode: str = Query(default="fan", pattern="^(fan|analyst)$")) -> list[dict]:
+    cards = [c for c in build_overlay_timeline(mode, language, None, None)["cards"] if c["kind"] in HIGHLIGHT_RANK]
+    ranked = sorted(cards, key=lambda c: (HIGHLIGHT_RANK[c["kind"]], c["display_at_second"]))[:MAX_HIGHLIGHTS]
+    return [{"second": c["display_at_second"], "minute": minute_mark(c["display_at_second"] // 60),
+             "kind": c["kind"], "label": kind_label(c["kind"], language), "team": c["team_id"],
+             "headline": c["headline"], "insight_id": c["insight_id"]}
+            for c in sorted(ranked, key=lambda c: c["display_at_second"])]
 
 
 @app.get("/api/moments")

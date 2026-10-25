@@ -144,6 +144,7 @@ class AgentTrace(BaseModel):
     status: Literal["completed", "rejected", "revised", "fallback", "skipped"]
     provider: Literal["foundry", "deepseek", "local"] = "local"
     summary: str
+    summary_zh: str | None = None  # same note for the Chinese studio; never machine-translated
     duration_ms: int
 
 

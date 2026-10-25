@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "matchpulse-studio"
-version = "0.1.0"
+version = "0.8.0"
 description = "面向直播演播室的合成足球比赛多智能体洞察引擎"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="MatchPulse: live, evidence-checked match intelligence on synthetic football data">
+  <meta name="description" content="MatchPulse: live match graphics and commentary from synthetic football data, checked against every event">
   <title>MatchPulse</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/static/fonts/barlow-condensed-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/static/styles.css?v=0.7.1">
+  <link rel="stylesheet" href="/static/styles.css?v=0.8.0">
 </head>
 <body>
   <header class="masthead">
@@ -17,39 +17,39 @@
     </div>
     <p class="fixture" id="fixture">Northbridge FC v Riverside Athletic, synthetic data</p>
     <div class="view-controls">
+      <span class="engine" id="provider" data-live="false">Local agents</span>
       <div class="segmented" role="group" aria-label="Audience">
         <button class="active" data-mode="fan" aria-pressed="true">Fan</button>
         <button data-mode="analyst" aria-pressed="false">Analyst</button>
       </div>
       <button class="language-button" id="language">中文</button>
-      <button class="view-button" id="view-angle" type="button" aria-pressed="true">TV view</button>
-      <button class="voice-button" id="voice-toggle" type="button" aria-pressed="false">Voice off</button>
-      <span class="engine" id="provider" data-live="false">Local agents</span>
     </div>
   </header>
 
   <main class="studio">
     <section class="stage" aria-label="Live match">
       <div class="screen">
-      <div class="broadcast" id="pitch">
-        <div class="pitch-plane" id="pitch-plane">
-        <svg class="markings" viewBox="0 0 105 68" preserveAspectRatio="none" aria-hidden="true">
-          <g fill="none" stroke="currentColor" stroke-width=".35">
-            <rect x="1" y="1" width="103" height="66"/>
-            <line x1="52.5" y1="1" x2="52.5" y2="67"/>
-            <circle cx="52.5" cy="34" r="9.15"/>
-            <rect x="1" y="13.85" width="16.5" height="40.3"/>
-            <rect x="87.5" y="13.85" width="16.5" height="40.3"/>
-            <rect x="1" y="24.85" width="5.5" height="18.3"/>
-            <rect x="98.5" y="24.85" width="5.5" height="18.3"/>
-            <path d="M17.5 26.7a9.15 9.15 0 0 1 0 14.6"/>
-            <path d="M87.5 26.7a9.15 9.15 0 0 0 0 14.6"/>
-          </g>
-          <g fill="currentColor"><circle cx="52.5" cy="34" r=".5"/><circle cx="12" cy="34" r=".4"/><circle cx="93" cy="34" r=".4"/></g>
-        </svg>
+        <div class="broadcast" id="pitch" data-view="tv">
+          <div class="pitch-plane" id="pitch-plane">
+            <svg class="markings" viewBox="0 0 105 68" preserveAspectRatio="none" aria-hidden="true">
+              <g fill="none" stroke="currentColor" stroke-width=".35">
+                <rect x="1" y="1" width="103" height="66"/>
+                <line x1="52.5" y1="1" x2="52.5" y2="67"/>
+                <circle cx="52.5" cy="34" r="9.15"/>
+                <rect x="1" y="13.85" width="16.5" height="40.3"/>
+                <rect x="87.5" y="13.85" width="16.5" height="40.3"/>
+                <rect x="1" y="24.85" width="5.5" height="18.3"/>
+                <rect x="98.5" y="24.85" width="5.5" height="18.3"/>
+                <path d="M17.5 26.7a9.15 9.15 0 0 1 0 14.6"/>
+                <path d="M87.5 26.7a9.15 9.15 0 0 0 0 14.6"/>
+              </g>
+              <g fill="currentColor"><circle cx="52.5" cy="34" r=".5"/><circle cx="12" cy="34" r=".4"/><circle cx="93" cy="34" r=".4"/></g>
+            </svg>
+          </div>
+          <!-- Players and the ball stand upright: they live in a flat layer positioned by projection. -->
+          <div class="pitch-overlay" id="pitch-overlay"></div>
+          <div class="loading-match" id="loading-match" role="status">Generating match…</div>
         </div>
-        <div class="loading-match" id="loading-match" role="status">Generating match…</div>
-      </div>
 
         <div class="scorebug" id="scoreboard">
           <span class="team-code home" id="home-team">NOR</span>
@@ -69,8 +69,8 @@
           <div class="lt-bar">
             <span class="lt-badge" id="lt-badge" aria-hidden="true"></span>
             <span class="lt-tags" id="eyebrow"></span>
-            <span class="lt-check" id="verified">Evidence checked</span>
-            <time id="overlay-time">--:--</time>
+            <span class="lt-check" id="verified" title="Every number and name checked against the match events"><span class="visually-hidden">Checked</span></span>
+            <time id="overlay-time">--</time>
           </div>
           <div class="lt-body">
             <h2 id="headline"></h2>
@@ -78,12 +78,7 @@
             <dl class="lt-evidence" id="evidence"></dl>
           </div>
         </article>
-
-
       </div>
-
-
-
 
       <div class="transport">
         <button class="play" id="replay-button">Play</button>
@@ -95,11 +90,18 @@
         <label class="speed"><span class="visually-hidden">Replay speed</span>
           <select id="replay-speed"><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="12">12×</option></select>
         </label>
+        <button class="icon-toggle" id="view-angle" type="button" aria-pressed="true" aria-label="TV view" title="TV view">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18 7 7h10l4 11z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 7v11M5.2 13h13.6" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+        </button>
+        <button class="icon-toggle" id="voice-toggle" type="button" aria-pressed="false" aria-label="Read cards aloud" title="Read cards aloud">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path class="wave" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="mute" d="m16 9 6 6m0-6-6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
       </div>
 
-      <p id="last-event" class="last-event"></p>
-      <button id="recap-button">Match recap ↓</button>
-      <p class="replay-status" id="replay-status">Drag the timeline or press play to replay the match live.</p>
+      <div class="below-transport">
+        <p class="replay-status" id="replay-status">Drag the timeline or press play to replay the match live.</p>
+        <button id="recap-button">Match recap ↓</button>
+      </div>
     </section>
 
     <aside class="rail">
@@ -110,16 +112,16 @@
         <label class="field">Follow a player
           <select id="player-focus"><option value="">Nobody</option></select>
         </label>
-        <div class="rail-choice"><span>Focus metric</span><div class="choice-row metric-choices" id="metric-buttons" role="group" aria-label="Focus metric">
+        <div class="rail-choice analyst-only"><span>Focus metric</span><div class="choice-row metric-choices" id="metric-buttons" role="group" aria-label="Focus metric">
           <button data-metric="" aria-pressed="true">None</button><button data-metric="xg" aria-pressed="false">xG</button><button data-metric="possession_pct" aria-pressed="false">Possession</button><button data-metric="pass_accuracy" aria-pressed="false">Pass accuracy</button><button data-metric="shots" aria-pressed="false">Shots</button>
         </div></div>
         <select id="metric-focus" hidden aria-hidden="true"><option value="">None</option><option value="xg">xG</option><option value="possession_pct">Possession</option><option value="pass_accuracy">Pass accuracy</option><option value="shots">Shots</option></select>
-        <div class="rail-choice"><span>Speed alert</span><div class="choice-row" id="speed-buttons" role="group" aria-label="Speed alert">
+        <div class="rail-choice analyst-only"><span>Speed alert</span><div class="choice-row" id="speed-buttons" role="group" aria-label="Speed alert">
           <button data-speed="20" aria-pressed="false">20</button><button data-speed="22" aria-pressed="true">22</button><button data-speed="30" aria-pressed="false">30 <small>km/h</small></button>
         </div></div>
         <select id="sprint-threshold" hidden aria-hidden="true"><option value="22">22 km/h</option><option value="20">20 km/h</option><option value="30">30 km/h</option></select>
-        <p class="player-line" id="player-line">Pick a player to follow them on the pitch and in every card.</p>
-        <div class="player-metrics"><span id="player-distance">—</span><span id="player-speed">—</span><span id="player-events">—</span></div>
+        <p class="player-line" id="player-line" hidden></p>
+        <div class="player-metrics" hidden><span id="player-distance"></span><span id="player-speed"></span><span id="player-events"></span></div>
       </section>
 
       <section class="rail-block">
@@ -127,8 +129,13 @@
             <button id="previous-moment" aria-label="Previous key moment">←</button>
             <button id="next-moment" aria-label="Next key moment">→</button>
           </div></div>
-          <select id="moment-select" hidden aria-hidden="true"><option value="">Jump to a key moment…</option></select>
-          <div id="moment-list" class="moment-list" role="list"></div>
+        <select id="moment-select" hidden aria-hidden="true"><option value="">Jump to a key moment…</option></select>
+        <div id="moment-list" class="moment-list" role="list"></div>
+      </section>
+
+      <section class="rail-block feed-block">
+        <h2>Commentary</h2>
+        <ol id="event-feed" class="event-feed"></ol>
       </section>
 
       <section class="rail-block">
@@ -140,31 +147,17 @@
           <div class="momentum-track"><i id="momentum-home"></i><i id="momentum-away"></i></div>
         </div>
       </section>
-
-      <section class="rail-block feed-block" hidden>
-        <h2>Event feed</h2>
-        <ol id="event-feed" class="event-feed"><li class="feed-empty">Events appear here during the replay.</li></ol>
-      </section>
     </aside>
   </main>
 
   <section class="workings" aria-labelledby="workings-title">
     <div class="workings-head">
       <h2 id="workings-title">How this card was made</h2>
-      <p>Every card passes through the same agents. The Evidence Guardian rejects any sentence it cannot trace to a match event.</p>
+      <p>Four agents handle every card. The Evidence Guardian sends back any line it cannot match to a match event.</p>
     </div>
     <ol id="agent-trace" class="pipeline"></ol>
     <div class="evidence-table" id="evidence-table"></div>
   </section>
-
-    <section class="export-panel panel" aria-label="Synthetic data and overlay exports">
-      <strong>Production outputs · synthetic data</strong>
-      <a href="/api/dataset?format=json" target="_blank" rel="noopener">Events JSON ↗</a>
-      <a href="/api/dataset?format=csv">Events CSV ↓</a>
-      <a href="/api/dataset/schema" target="_blank" rel="noopener">Field definitions ↗</a>
-      <a id="timeline-export" href="/api/overlays/timeline" target="_blank" rel="noopener">Overlay timeline ↗</a>
-      <small>Timeline export uses verified local templates; live cards can use DeepSeek.</small>
-    </section>
 
   <section id="recap" class="recap" aria-labelledby="recap-title">
     <h2 class="visually-hidden" id="recap-title">Full-time recap</h2>
@@ -175,17 +168,27 @@
         <span class="ft-num" id="recap-score">—</span>
         <span class="ft-team away" id="ft-away">Riverside Athletic</span>
       </div>
-      <h3 id="recap-goal-heading">Goals</h3><ol id="recap-goals" class="chances"></ol>
+      <div class="ft-scorers"><ul id="ft-home-scorers"></ul><ul id="ft-away-scorers"></ul></div>
     </div>
     <div class="recap-text">
-      <p id="recap-summary">The recap is written from the full event log once the match is complete.</p>
+      <h3>Match report</h3>
+      <p id="recap-summary">The report is written from the full event log once the match is complete.</p>
       <p class="recap-source" id="recap-provider"></p>
       <h3>Chances that did not go in</h3>
       <ol id="recap-chances" class="chances"></ol>
     </div>
   </section>
 
-  <script src="/static/i18n.js?v=0.7.1" defer></script>
-  <script src="/static/app.js?v=0.7.1" defer></script>
+  <footer class="site-footer">
+    <span>All teams, players and events are synthetic.</span>
+    <a href="/api/dataset?format=json" target="_blank" rel="noopener">Events JSON</a>
+    <a href="/api/dataset?format=csv">Events CSV</a>
+    <a href="/api/dataset/schema" target="_blank" rel="noopener">Field definitions</a>
+    <a id="timeline-export" href="/api/overlays/timeline" target="_blank" rel="noopener">Overlay timeline</a>
+    <a href="/api/commentary" id="commentary-export" target="_blank" rel="noopener">Commentary</a>
+  </footer>
+
+  <script src="/static/i18n.js?v=0.8.0" defer></script>
+  <script src="/static/app.js?v=0.8.0" defer></script>
 </body>
 </html>

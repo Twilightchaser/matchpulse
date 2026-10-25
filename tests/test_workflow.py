@@ -58,8 +58,9 @@ def test_chinese_localization_is_not_partial_string_replacement() -> None:
     _, snapshot = _snapshot()
     overlay, _ = InsightWorkflow().run(snapshot, AudienceProfile(mode="fan", language="zh"))
     if overlay:
+        from app.house_style import kind_label
         assert overlay.language == "zh"
-        assert overlay.eyebrow == "比赛脉搏"
+        assert overlay.eyebrow == kind_label(overlay.kind, "zh")  # the tag names the moment, in Chinese
         assert " MATCH " not in overlay.headline
 
 

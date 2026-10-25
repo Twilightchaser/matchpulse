@@ -13,10 +13,7 @@ const UI_ZH = {
   "Nobody": "暂不关注",
   "Pick a player to follow them on the pitch and in every card.": "选择球员，持续跟踪跑动与关键贡献。",
   "Match stats": "比赛数据",
-  "Event feed": "事件动态",
-  "Events appear here during the replay.": "播放后显示比赛事件。",
-  "How this card was made": "这条洞察如何生成",
-  "Every card passes through the same agents. The Evidence Guardian rejects any sentence it cannot trace to a match event.": "每条洞察经过分析、解释与证据校验；无法关联比赛事件的内容会被退回修订。",
+  "How this card was made": "这张卡片是怎么来的",
   "Full time": "全场结束",
   "Full-time recap": "赛后回顾",
   "Chances that did not go in": "未转化为进球的机会",
@@ -38,11 +35,11 @@ const UI_ZH = {
   "Resume replay": "继续播放",
   "Pause replay": "暂停播放",
   "Replay match": "重新播放",
-  "REPLAY PAUSED": "已暂停",
-  "KEY MOMENT · PRESS RESUME TO WATCH": "关键时刻 · 点击继续播放",
-  "REPLAYING LIVE EVENT FEED": "比赛回放中",
-  "RECONNECTING EVENT FEED": "正在重连事件流",
-  "FULL TIME · RECAP READY": "全场结束 · 回顾已就绪",
+  "Paused": "已暂停",
+  "Key moment. Press Resume to watch it play out.": "关键时刻，点击继续播放观看。",
+  "Replaying the match": "比赛回放中",
+  "Reconnecting…": "正在重新连接…",
+  "Full time. The match report is below.": "全场结束，赛后报道在下方。",
   "Drag the timeline or press play to replay the match live.": "拖动时间轴或点击播放，查看比赛进程。",
   "controlled": "受控",
   "contested": "争夺",
@@ -76,12 +73,6 @@ const UI_ZH = {
   "touches": "次触球",
   "Preparing recap…": "正在生成中文回顾…",
   "Recap unavailable. Please retry.": "回顾暂不可用，请重试。",
-  "Production outputs · synthetic data": "制作输出 · 合成数据",
-  "Events JSON ↗": "事件 JSON ↗",
-  "Events CSV ↓": "事件 CSV ↓",
-  "Field definitions ↗": "字段说明 ↗",
-  "Overlay timeline ↗": "叠加时间轴 ↗",
-  "Timeline export uses verified local templates; live cards can use DeepSeek.": "整场时间轴使用已验证的本地模板，实时卡片可调用 DeepSeek。",
   "Tactical Analyst": "战术分析",
   "Moment Explainer": "时刻解释",
   "Evidence Guardian": "证据校验",
@@ -112,16 +103,37 @@ const UI_ZH = {
   "✓ EVIDENCE CHECKED": "✓ 证据已核对",
   "SAFE FALLBACK": "已启用可靠降级",
   "MATCH PULSE": "比赛脉搏",
-  "No player": "暂不关注",
   "Opponent": "对手",
-  "Chances": "机会"
+  "Chances": "机会",
+  "Commentary": "解说",
+  "Commentary starts at kick-off.": "开球后这里会出现解说。",
+  "Match report": "赛后报道",
+  "The report is written from the full event log once the match is complete.": "比赛结束后，根据完整事件记录写出报道。",
+  "Written from the event log": "根据事件记录生成",
+  "Written by DeepSeek, checked against the event log": "由 DeepSeek 撰写，已与事件记录核对",
+  "Four agents handle every card. The Evidence Guardian sends back any line it cannot match to a match event.": "每张卡片都经过四个 Agent。对不上比赛事件的文案，会被证据校验退回重写。",
+  "All teams, players and events are synthetic.": "所有球队、球员和比赛事件均为合成数据。",
+  "Events JSON": "事件 JSON",
+  "Events CSV": "事件 CSV",
+  "Field definitions": "字段说明",
+  "Overlay timeline": "字幕时间轴",
+  "Saved": "被扑出",
+  "Blocked": "被封堵",
+  "Off target": "射偏",
+  "Checked": "已核对",
+  "Shots (last 5 min)": "射门（近5分钟）",
+  "Previous momentum leader": "此前占优的一方",
+  "Ball regained": "抢回球权",
+  "Shot": "射门",
+  "Regain to shot": "从断球到射门",
+  "Possession changes: previous / current 5 min": "球权转换：之前 / 近5分钟"
 };
 const UI_EN = Object.fromEntries(Object.entries(UI_ZH).map(([en,zh])=>[zh,en]));
 function tr(value) {
   const key = UI_EN[value] || value;
   if (state.language !== 'zh') return key;
   if (UI_ZH[key]) return UI_ZH[key];
-  return key.replace(' (last 5 min)', '（近5分钟）').replace('Momentum share', '势头份额').replace('High pressures and regains', '高位压迫与夺回球权').replace('Ball won in opponent half', '对方半场抢回球权').replace('Final-third actions', '进攻三区动作');
+  return key.replace(' (last 5 min)', '（近5分钟）').replace('Momentum share', '势头占比').replace('High pressures and regains', '高位压迫与夺回球权').replace('Ball won in opponent half', '对方半场抢回球权').replace('Final-third actions', '进攻三区动作');
 }
 function applyLocale() {
   document.documentElement.lang=state.language === 'zh' ? 'zh-CN' : 'en';
